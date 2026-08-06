@@ -1,0 +1,29 @@
+name: 'Soroban Resource Budget Guard'
+description: 'Automated CI-native tracking of Soroban smart contract resource costs.'
+author: 'BudgetGate'
+
+inputs:
+  github-token:
+    description: 'GitHub token for posting PR comments'
+    required: true
+    default: ${{ github.token }}
+  baseline-path:
+    description: 'Path to the baseline snapshot JSON'
+    required: false
+    default: 'baseline.json'
+  new-path:
+    description: 'Path to the new snapshot JSON'
+    required: false
+    default: 'new.json'
+  binary-path:
+    description: 'Path to the budget-core binary'
+    required: false
+    default: './budget-core'
+
+outputs:
+  regression_detected:
+    description: 'Boolean string true if a regression was detected'
+
+runs:
+  using: 'node20'
+  main: 'dist/index.js'
