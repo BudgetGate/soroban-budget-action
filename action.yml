@@ -14,11 +14,18 @@ inputs:
   new-path:
     description: 'Path to the new snapshot JSON'
     required: false
-    default: 'new.json'
-  binary-path:
-    description: 'Path to the budget-core binary'
+  fixture-path:
+    description: 'Path to fixture JSON (if dynamically simulating)'
     required: false
-    default: './budget-core'
+  rpc-url:
+    description: 'Soroban RPC URL'
+    required: false
+  binary-path:
+    description: 'Path to the budget-core binary (if providing locally)'
+    required: false
+  binary-version:
+    description: 'Version of budget-core to download from GitHub releases'
+    required: false
 
 outputs:
   regression_detected:

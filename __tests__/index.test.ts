@@ -1,11 +1,13 @@
 import * as core from '@actions/core';
 import * as github from '@actions/github';
 import * as exec from '@actions/exec';
+import * as tc from '@actions/tool-cache';
 import { run } from '../src/index';
 
 jest.mock('@actions/core');
 jest.mock('@actions/github');
 jest.mock('@actions/exec');
+jest.mock('@actions/tool-cache');
 
 describe('soroban-budget-action', () => {
   let mockGetInput: jest.Mock;
@@ -13,6 +15,8 @@ describe('soroban-budget-action', () => {
   let mockSetOutput: jest.Mock;
   let mockExec: jest.Mock;
   let mockCreateComment: jest.Mock;
+  let mockDownloadTool: jest.Mock;
+  let mockCacheFile: jest.Mock;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -21,6 +25,9 @@ describe('soroban-budget-action', () => {
     mockSetFailed = core.setFailed as jest.Mock;
     mockSetOutput = core.setOutput as jest.Mock;
     mockExec = exec.exec as jest.Mock;
+    
+    mockDownloadTool = tc.downloadTool as jest.Mock;
+    mockCacheFile = tc.cacheFile as jest.Mock;
     
     mockCreateComment = jest.fn();
     (github.getOctokit as jest.Mock).mockReturnValue({
@@ -142,5 +149,33 @@ describe('soroban-budget-action', () => {
     await run();
 
     expect(mockSetFailed).toHaveBeenCalledWith(errorMsg);
+  });
+  it('downloads binary via tool-cache when binary-version is provided', async () => {
+    mockGetInput.mockImplementation((name: string) => {
+      switch (name) {
+        case 'github-token': return 'fake-token';
+        case 'baseline-path': return 'base.json';
+        case 'fixture-path': return 'fixture.json';
+        case 'rpc-url': return 'https://rpc.example';
+        case 'binary-version': return '1.2.3';
+        default: return '';
+      }
+    });
+
+    mockDownloadTool.mockResolvedValue('/tmp/downloaded');
+    mockCacheFile.mockResolvedValue('/tmp/cached');
+    
+    mockExec.mockResolvedValue(0);
+
+    await run();
+
+    expect(mockDownloadTool).toHaveBeenCalledWith('https://github.com/BudgetGate/soroban-budget-core/releases/download/v1.2.3/budget-core-linux-amd64');
+    expect(mockCacheFile).toHaveBeenCalledWith('/tmp/downloaded', 'budget-core', 'soroban-budget-core', '1.2.3');
+    expect(mockExec).toHaveBeenCalledWith('chmod', ['+x', '/tmp/cached/budget-core']);
+    expect(mockExec).toHaveBeenCalledWith(
+      '/tmp/cached/budget-core',
+      ['--baseline', 'base.json', '--fixture', 'fixture.json', '--rpc-url', 'https://rpc.example'],
+      expect.any(Object)
+    );
   });
 });
