@@ -1,19 +1,36 @@
 import * as core from '@actions/core';
 import * as github from '@actions/github';
 import * as exec from '@actions/exec';
+import * as tc from '@actions/tool-cache';
+import * as path from 'path';
 
 export async function run(): Promise<void> {
   try {
     const token = core.getInput('github-token');
     const baselinePath = core.getInput('baseline-path') || 'baseline.json';
-    const newPath = core.getInput('new-path') || 'new.json';
+    const newPath = core.getInput('new-path');
+    const fixturePath = core.getInput('fixture-path');
+    const rpcUrl = core.getInput('rpc-url');
+    let binaryPath = core.getInput('binary-path');
+    const binaryVersion = core.getInput('binary-version');
     
-    // In production, we would use tool-cache to download the latest binary.
-    // For this MVP, we assume the binary is available in the runner environment
-    // or we compile it during the workflow setup.
-    const binaryPath = core.getInput('binary-path') || './budget-core';
+    // Download binary if version is specified
+    if (binaryVersion && !binaryPath) {
+      core.info(`Downloading soroban-budget-core v${binaryVersion}...`);
+      const url = `https://github.com/BudgetGate/soroban-budget-core/releases/download/v${binaryVersion}/budget-core-linux-amd64`;
+      const downloadPath = await tc.downloadTool(url);
+      
+      // Cache the tool
+      const cachedPath = await tc.cacheFile(downloadPath, 'budget-core', 'soroban-budget-core', binaryVersion);
+      binaryPath = path.join(cachedPath, 'budget-core');
+      
+      // Make it executable
+      await exec.exec('chmod', ['+x', binaryPath]);
+    } else if (!binaryPath) {
+      binaryPath = './budget-core';
+    }
     
-    core.info(`Running Soroban Budget Guard Core against ${baselinePath} and ${newPath}`);
+    core.info(`Running Soroban Budget Guard Core against ${baselinePath}`);
     
     let output = '';
     let errorOutput = '';
@@ -28,10 +45,21 @@ export async function run(): Promise<void> {
       }
     };
     
-    // Do not throw on non-zero exit so we can still post the comment on regression
     options.ignoreReturnCode = true;
 
-    const exitCode = await exec.exec(binaryPath, ['--baseline', baselinePath, '--new', newPath], options);
+    const args = ['--baseline', baselinePath];
+    if (fixturePath) {
+      args.push('--fixture', fixturePath);
+      if (rpcUrl) {
+        args.push('--rpc-url', rpcUrl);
+      }
+    } else if (newPath) {
+      args.push('--new', newPath);
+    } else {
+      args.push('--new', 'new.json');
+    }
+
+    const exitCode = await exec.exec(binaryPath, args, options);
 
     if (errorOutput && exitCode !== 0) {
       core.warning(`Binary stderr: ${errorOutput}`);
