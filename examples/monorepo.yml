@@ -1,0 +1,21 @@
+name: Soroban Budget Guard (Monorepo)
+
+on:
+  pull_request:
+    paths:
+      - 'contracts/**'
+  push:
+    branches: [ "main" ]
+
+jobs:
+  budget-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Run Soroban Budget Guard
+        uses: BudgetGate/soroban-budget-action@v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          fixture-path: 'contracts/fixtures/budget.json'

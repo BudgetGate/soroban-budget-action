@@ -1,4 +1,4 @@
-# Contributing to soroban-budget-action
+# Contributing to soroban-budget-core
 
 Thank you for contributing! 
 
