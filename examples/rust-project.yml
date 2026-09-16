@@ -1,0 +1,24 @@
+name: Soroban Budget Guard
+
+on:
+  pull_request:
+    branches: [ "main" ]
+  push:
+    branches: [ "main" ]
+
+jobs:
+  budget-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Compile Smart Contracts
+        run: cargo build --target wasm32-unknown-unknown --release
+
+      - name: Run Soroban Budget Guard
+        uses: BudgetGate/soroban-budget-action@v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          fixture-path: 'tests/fixture.json'
+          rpc-url: 'https://soroban-testnet.stellar.org'
