@@ -53,6 +53,8 @@ export async function run(): Promise<void> {
       if (rpcUrl) {
         args.push('--rpc-url', rpcUrl);
       }
+      // Ensure we output the new snapshot to a file so it can be cached
+      args.push('--output-json', 'new.json');
     } else if (newPath) {
       args.push('--new', newPath);
     } else {
@@ -83,7 +85,20 @@ export async function run(): Promise<void> {
     } else {
       core.info('Not running in a Pull Request context. Skipping comment generation.');
       // When merging to main, we might want to cache the new.json as baseline.json
-      core.info('Tip: In the main branch workflow, use actions/cache to persist new.json as the baseline for future PRs.');
+      if (github.context.ref === 'refs/heads/main' || github.context.ref === 'refs/heads/master') {
+        core.info('On main branch. Caching new.json as baseline for future PRs.');
+        try {
+          // Import here to avoid failing if not installed globally
+          const cache = require('@actions/cache');
+          // Cache the new.json as the baseline for this commit
+          const cacheId = await cache.saveCache(['new.json'], `budgetgate-baseline-${github.context.sha}`);
+          core.info(`Saved baseline cache with ID: ${cacheId}`);
+        } catch (e) {
+          core.warning(`Failed to save baseline cache: ${e}`);
+        }
+      } else {
+        core.info('Tip: In the main branch workflow, use actions/cache to persist new.json as the baseline for future PRs.');
+      }
     }
 
     // Set outputs for subsequent workflow steps

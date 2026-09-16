@@ -174,7 +174,7 @@ describe('soroban-budget-action', () => {
     expect(mockExec).toHaveBeenCalledWith('chmod', ['+x', '/tmp/cached/budget-core']);
     expect(mockExec).toHaveBeenCalledWith(
       '/tmp/cached/budget-core',
-      ['--baseline', 'base.json', '--fixture', 'fixture.json', '--rpc-url', 'https://rpc.example'],
+      ['--baseline', 'base.json', '--fixture', 'fixture.json', '--rpc-url', 'https://rpc.example', '--output-json', 'new.json'],
       expect.any(Object)
     );
   });
