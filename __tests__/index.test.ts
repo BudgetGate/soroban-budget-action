@@ -91,28 +91,29 @@ describe('soroban-budget-action', () => {
     expect(mockSetFailed).not.toHaveBeenCalled();
   });
 
-  it('detects regression from output text and fails the action', async () => {
+  it('does not treat report text as a regression when core exits 0', async () => {
     mockGetInput.mockReturnValue('default');
-    
-    // Simulate exec writing regression string to stdout
+
     mockExec.mockImplementation(async (cmd, args, options) => {
       if (options && options.listeners && options.listeners.stdout) {
-        options.listeners.stdout(Buffer.from('Something went wrong. ❌ REGRESSION found.'));
+        options.listeners.stdout(Buffer.from('| f | CPUInstructions | 1000 | 1000 | 0 | 0.00% | n/a | ❌ REGRESSION |'));
       }
       return 0;
     });
 
     await run();
 
-    expect(mockSetOutput).toHaveBeenCalledWith('regression_detected', 'true');
-    expect(mockSetFailed).toHaveBeenCalledWith(expect.stringContaining('regression detected'));
+    expect(mockSetOutput).toHaveBeenCalledWith('regression_detected', 'false');
+    expect(mockSetFailed).not.toHaveBeenCalled();
   });
 
-  it('detects regression from non-zero exit code and fails the action', async () => {
+  it('reports a regression when core exits 1 and comments on the PR', async () => {
     mockGetInput.mockReturnValue('default');
-    
-    // Simulate exec exiting with 1
+
     mockExec.mockImplementation(async (cmd, args, options) => {
+      if (options && options.listeners && options.listeners.stdout) {
+        options.listeners.stdout(Buffer.from('| f | CPUInstructions | 1000 | 2000 | 1000 | 100.00% | 0.00% | ❌ REGRESSION |'));
+      }
       return 1;
     });
 
@@ -120,6 +121,40 @@ describe('soroban-budget-action', () => {
 
     expect(mockSetOutput).toHaveBeenCalledWith('regression_detected', 'true');
     expect(mockSetFailed).toHaveBeenCalledWith(expect.stringContaining('regression detected'));
+    expect(mockCreateComment).toHaveBeenCalledWith(expect.objectContaining({
+      body: expect.stringContaining('Regression%20Detected'),
+    }));
+  });
+
+  it('fails without a regression comment when core cannot compare', async () => {
+    mockGetInput.mockReturnValue('default');
+
+    // Core exits 2 on usage and runtime errors, with the reason on stderr and nothing on stdout.
+    mockExec.mockImplementation(async (cmd, args, options) => {
+      if (options && options.listeners && options.listeners.stderr) {
+        options.listeners.stderr(Buffer.from('Error opening baseline: open default: no such file or directory\n'));
+      }
+      return 2;
+    });
+
+    await run();
+
+    expect(mockSetOutput).toHaveBeenCalledWith('regression_detected', 'false');
+    expect(mockSetFailed).toHaveBeenCalledWith(
+      'soroban-budget-core failed with exit code 2: Error opening baseline: open default: no such file or directory'
+    );
+    expect(mockCreateComment).not.toHaveBeenCalled();
+  });
+
+  it('treats any other exit code as a failure, not a regression', async () => {
+    mockGetInput.mockReturnValue('default');
+    mockExec.mockResolvedValue(127);
+
+    await run();
+
+    expect(mockSetOutput).toHaveBeenCalledWith('regression_detected', 'false');
+    expect(mockSetFailed).toHaveBeenCalledWith('soroban-budget-core failed with exit code 127: no error output');
+    expect(mockCreateComment).not.toHaveBeenCalled();
   });
 
   it('skips comment creation when not in a PR context', async () => {
