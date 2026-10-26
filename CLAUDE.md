@@ -28,7 +28,7 @@ State of `main` (`c03f4c2`) on 2026-10-26. `package.json` name `soroban-budget-a
 | `dist/` | Committed on purpose. Matched a fresh `ncc` build of `src/` on 2026-10-26. |
 | `lib/index.js` | Committed (August), referenced by nothing (A6). |
 | `examples/` | `rust-project.yml`, `monorepo.yml`. Both use `@v1` and `fixture-path`, and set neither `binary-path` nor `binary-version`. |
-| `.github/workflows/ci.yml` | `Action CI`, job `build-and-test`: Node 20, `npm ci`, `npm run build`, `npm test`. Runs on push/PR to `main` only. |
+| `.github/workflows/ci.yml` | `Action CI`, job `build-and-test`: Node 20, `npm ci`, `npm run build`, then fails if the build changed `dist/` (`git diff --quiet -- dist`), then `npm test`. Runs on push/PR to `main` only. `dist/` is in `.gitignore` with only `dist/index.js` force-tracked, so the check covers that file, not new output files. |
 | Other | `website/` (unexplained Vite app; its README is the unedited Vite template), `DOCUMENTATION.md`, `PR_BODY.md`, `pr_body_action.md` (A12), `CONTRIBUTING.md` (generic; says Go 1.21+, copied from core), `SECURITY.md` (reporting address `security@budgetgate.io`, not checked to be deliverable; states the project is unaudited). |
 | Dependencies | `@actions/cache ^6.2.0`, `@actions/core ^1.10.1`, `@actions/exec ^1.1.1`, `@actions/github ^5.1.1`, `@actions/tool-cache ^2.0.1` |
 | Dev dependencies | `@vercel/ncc ^0.44.1`, `jest ^30.4.2`, `ts-jest ^29.4.12`, `typescript ^5.5.4`, `esbuild`, `@types/jest`, `@types/node ^26.1.2` |
@@ -48,7 +48,6 @@ Checked 2026-10-26 against `origin/main` (`c03f4c2`).
 | A7 | README example pins `actions/checkout@v3` (examples use `@v4`). `github-token` is `required: true` but has a default. | `README.md`, `action.yml` |
 | A8 | Regression is decided by core's exit code **or** by finding `❌ REGRESSION` in stdout, against the rule in section 6. Any core error (exit 1 today) is reported as a regression, and the error text is posted as the PR comment. Fixing it properly needs core's exit code 2 (core C4). | `src/index.ts` `hasRegression`, test "detects regression from output text" |
 | A9 | Posts a new PR comment on every run instead of updating one found by a hidden marker. | `src/index.ts` `createComment` |
-| A10 | CI does not check that `dist/` matches `src/`. | `.github/workflows/ci.yml` |
 | A11 | Unverified: `runs.using: node20` may be deprecated on GitHub-hosted runners. Check GitHub's current Node runtime support before the first release. | `action.yml` |
 | A12 | `DOCUMENTATION.md` describes behaviour that does not exist: `SOROBAN_BUDGET_DEBUG` / `SOROBAN_RPC_TIMEOUT` env vars, 3 RPC retries, "missing baseline exits 0", updating the existing comment, falling back to the console when commenting fails, a summary/advice comment layout, memory in the diff. It duplicates the docs site. `PR_BODY.md` and `pr_body_action.md` are stale PR descriptions; `pr_body_action.md` claims PRs "consume the previously cached baseline", which nothing does (A5). | `DOCUMENTATION.md`, `pr_body_action.md`, `src/index.ts` |
 
@@ -56,7 +55,7 @@ Checked 2026-10-26 against `origin/main` (`c03f4c2`).
 
 Core's real measurement has landed (core #9, #8; verified on testnet), so the Action can be run against real numbers today by building core from source and passing `binary-path` (the docs site's setup page does this). Core now exits 0 pass / 1 regression / 2 error (core #15), so A8 is unblocked. Still blocked on core: a release binary (core C12) for A2/A3.
 
-1. Not blocked: A4, A6, A7, A10, A12 (license, unused `lib/`, README accuracy, dist-sync check in CI, stale repo docs).
+1. Not blocked: A4, A6, A7, A12 (license, unused `lib/`, README accuracy, stale repo docs).
 2. A5: implement baseline restore (Actions cache, as decided) and type the `@actions/cache` import.
 3. A9: update one PR comment by hidden marker.
 4. A8: decide regression from core's exit code only (core has exit code 2 since core #15).

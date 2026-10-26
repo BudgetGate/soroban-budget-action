@@ -9,7 +9,8 @@ Last updated: 2026-10-26
 - `main` is at `bf1a289`. `dist/` is in sync with `src/`.
 - A13 done: the tool-cache test builds its expected path with `path.join`; 6 of 6 tests pass on Windows and Linux.
 - Core is feature-complete for its work order (exit code 2 for errors, report-only stdout, live network caps). The docs site's setup page shows the interim workflow: build core from source, pass `binary-path`.
-- Next up: A10 (CI check that `dist/` matches `src/`), then A8 (core now exits 2 on errors, so the Action can stop reporting them as regressions).
+- A10 done: CI rebuilds `dist/` and fails if it differs from the committed copy.
+- Next up: A8 (core now exits 2 on errors, so the Action can stop reporting them as regressions).
 
 ## Blocked on core
 
@@ -21,7 +22,7 @@ The Action can't be finished end to end until core has:
 ## Phase 1: Repo accuracy (not blocked)
 
 - [x] A13: make the tool-cache test pass on Windows (path separators)
-- [ ] A10: CI step that rebuilds `dist/` and fails if it differs from the committed copy
+- [x] A10: CI step that rebuilds `dist/` and fails if it differs from the committed copy
 - [ ] A4: `package.json` license `MIT` and a real description
 - [ ] A6: remove the unused `lib/index.js`
 - [ ] A7: README example uses `actions/checkout@v4`; resolve `github-token` being both required and defaulted
