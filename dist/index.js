@@ -35795,12 +35795,19 @@ async function run() {
             args.push('--new', 'new.json');
         }
         const exitCode = await exec.exec(binaryPath, args, options);
-        if (errorOutput && exitCode !== 0) {
-            core.warning(`Binary stderr: ${errorOutput}`);
+        // Core exits 0 when nothing regressed, 1 on a regression, and 2 when it could not compare
+        // (bad input, RPC failure, ...). Only its exit code decides; the report text is not parsed.
+        if (exitCode !== 0 && exitCode !== 1) {
+            core.setOutput('regression_detected', 'false');
+            const detail = errorOutput.trim() || 'no error output';
+            core.setFailed(`soroban-budget-core failed with exit code ${exitCode}: ${detail}`);
+            return;
         }
-        core.info('Command executed successfully. Generating PR comment...');
-        // Set outputs for subsequent workflow steps
-        const hasRegression = output.includes('❌ REGRESSION') || exitCode !== 0;
+        if (errorOutput.trim()) {
+            core.info(errorOutput.trim());
+        }
+        const hasRegression = exitCode === 1;
+        core.info(hasRegression ? 'Regression found. Generating PR comment...' : 'No regression. Generating PR comment...');
         // Post the markdown table to the PR
         if (github.context.payload.pull_request) {
             const octokit = github.getOctokit(token);

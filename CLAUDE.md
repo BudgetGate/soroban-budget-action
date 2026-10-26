@@ -22,9 +22,9 @@ State of `main` (`c03f4c2`) on 2026-10-26. `package.json` name `soroban-budget-a
 | Item | Detail (read in full unless stated) |
 |------|--------|
 | Entry | `src/index.ts`, built with `npm run build` to `dist/index.js` (`ncc build src/index.ts -o dist --license licenses.txt`). `tsconfig.json` has `"strict": true`. |
-| `src/index.ts` | Reads inputs; if `binary-version` is set and `binary-path` is not, downloads `budget-core-linux-amd64` from core release `v<version>` with `@actions/tool-cache`, otherwise uses `binary-path` or `./budget-core`. Runs core with `--fixture` (+ `--rpc-url`, `--output-json new.json`) or `--new`. Treats any non-zero exit **or** the text `❌ REGRESSION` in stdout as a regression. Posts a new PR comment every run. On `main`/`master` outside a PR, saves `new.json` with `@actions/cache` (key `budgetgate-baseline-<sha>`, loaded with `require`). |
+| `src/index.ts` | Reads inputs; if `binary-version` is set and `binary-path` is not, downloads `budget-core-linux-amd64` from core release `v<version>` with `@actions/tool-cache`, otherwise uses `binary-path` or `./budget-core`. Runs core with `--fixture` (+ `--rpc-url`, `--output-json new.json`) or `--new`. Decides from core's exit code only: 0 pass, 1 regression (fails the step), anything else is an error (fails the step with core's stderr, `regression_detected=false`, no PR comment, no cache save). Posts a new PR comment every run. On `main`/`master` outside a PR, saves `new.json` with `@actions/cache` (key `budgetgate-baseline-<sha>`, loaded with `require`). |
 | `action.yml` | `runs.using: node20`. Inputs: `github-token` (required, default `${{ github.token }}`), `baseline-path` (default `baseline.json`), `new-path`, `fixture-path`, `rpc-url`, `binary-path`, `binary-version`. Output: `regression_detected`. |
-| Tests | `__tests__/index.test.ts`, Jest 30 + `ts-jest`, 6 tests. Mocks `@actions/core`, `@actions/github`, `@actions/exec`, `@actions/tool-cache`. One test asserts regression detection from output text. |
+| Tests | `__tests__/index.test.ts`, Jest 30 + `ts-jest`, 8 tests. Mocks `@actions/core`, `@actions/github`, `@actions/exec`, `@actions/tool-cache`. Exit codes 0, 1, 2 and 127 each have a test; report text alone never counts as a regression. |
 | `dist/` | Committed on purpose. Matched a fresh `ncc` build of `src/` on 2026-10-26. |
 | `lib/index.js` | Committed (August), referenced by nothing (A6). |
 | `examples/` | `rust-project.yml`, `monorepo.yml`. Both use `@v1` and `fixture-path`, and set neither `binary-path` nor `binary-version`. |
@@ -46,20 +46,18 @@ Checked 2026-10-26 against `origin/main` (`c03f4c2`).
 | A5 | Baseline persistence half-built: `new.json` is saved to the Actions cache on `main`, but nothing restores it, so PRs still need `baseline.json` on disk. `@actions/cache` is loaded with an untyped `require`. Decision recorded in the workspace `roadmap.md` (Actions cache), never implemented end to end. | `src/index.ts`, no `restoreCache` |
 | A6 | `lib/index.js` committed and unused (`action.yml` runs `dist/index.js`). | `git ls-tree`, grep |
 | A7 | README example pins `actions/checkout@v3` (examples use `@v4`). `github-token` is `required: true` but has a default. | `README.md`, `action.yml` |
-| A8 | Regression is decided by core's exit code **or** by finding `❌ REGRESSION` in stdout, against the rule in section 6. Any core error (exit 1 today) is reported as a regression, and the error text is posted as the PR comment. Fixing it properly needs core's exit code 2 (core C4). | `src/index.ts` `hasRegression`, test "detects regression from output text" |
 | A9 | Posts a new PR comment on every run instead of updating one found by a hidden marker. | `src/index.ts` `createComment` |
 | A11 | Unverified: `runs.using: node20` may be deprecated on GitHub-hosted runners. Check GitHub's current Node runtime support before the first release. | `action.yml` |
 | A12 | `DOCUMENTATION.md` describes behaviour that does not exist: `SOROBAN_BUDGET_DEBUG` / `SOROBAN_RPC_TIMEOUT` env vars, 3 RPC retries, "missing baseline exits 0", updating the existing comment, falling back to the console when commenting fails, a summary/advice comment layout, memory in the diff. It duplicates the docs site. `PR_BODY.md` and `pr_body_action.md` are stale PR descriptions; `pr_body_action.md` claims PRs "consume the previously cached baseline", which nothing does (A5). | `DOCUMENTATION.md`, `pr_body_action.md`, `src/index.ts` |
 
 ## 4. Work order for this repo
 
-Core's real measurement has landed (core #9, #8; verified on testnet), so the Action can be run against real numbers today by building core from source and passing `binary-path` (the docs site's setup page does this). Core now exits 0 pass / 1 regression / 2 error (core #15), so A8 is unblocked. Still blocked on core: a release binary (core C12) for A2/A3.
+Core's real measurement has landed (core #9, #8; verified on testnet), so the Action can be run against real numbers today by building core from source and passing `binary-path` (the docs site's setup page does this). Core exits 0 pass / 1 regression / 2 error (core #15), and the Action uses that (A8 fixed). Still blocked on core: a release binary (core C12) for A2/A3.
 
 1. Not blocked: A4, A6, A7, A12 (license, unused `lib/`, README accuracy, stale repo docs).
 2. A5: implement baseline restore (Actions cache, as decided) and type the `@actions/cache` import.
 3. A9: update one PR comment by hidden marker.
-4. A8: decide regression from core's exit code only (core has exit code 2 since core #15).
-5. A1, A2, A3: README and examples that actually run, then a release when asked.
+4. A1, A2, A3: README and examples that actually run, then a release when asked.
 
 `roadmap.md` tracks progress against this list.
 
@@ -70,14 +68,14 @@ npm ci
 npm test            # jest
 npm run build       # ncc build, writes dist/
 ```
-After any change under `src/`, run the build and commit the updated `dist/` in the same PR. A stale `dist/` means runners execute old code. Run on 2026-10-27 (Windows) after A13: `npm test` 6 of 6 pass, `npm run build` leaves `dist/` unchanged, so it is in sync with `src/`. Tests that check paths build the expected value with `path.join`, so they pass on any OS.
+After any change under `src/`, run the build and commit the updated `dist/` in the same PR. A stale `dist/` means runners execute old code. Run on 2026-10-27 (Windows) after A8: `npm test` 8 of 8 pass, and `dist/` was rebuilt from `src/` and committed. `dist/` is in `.gitignore`, so a plain `git add dist/index.js` is refused and aborts the whole `git add`; stage it with `git add -f dist/index.js`. Tests that check paths build the expected value with `path.join`, so they pass on any OS.
 
 ## 6. Rules
 
 ### Action behavior
 - Read inputs and write outputs through `@actions/core`. Fail with `core.setFailed`.
 - Never log the token or any secret.
-- Decide "regression" from core's exit code, not by parsing the Markdown report. This needs core's exit code fix (C4 in that repo). Until then, say so in the report instead of parsing text.
+- Decide "regression" from core's exit code (0 pass, 1 regression, anything else an error), never by parsing the Markdown report. On an error, fail with core's stderr and post no regression comment.
 - Update the existing Budget Gate PR comment instead of posting a new one per push. Find it with a hidden HTML marker.
 - Tests mock `@actions/exec` and the GitHub client. No live network in tests.
 - Keep the example workflow in the README runnable. If you change an input, change the example.

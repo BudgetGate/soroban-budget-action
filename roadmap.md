@@ -10,7 +10,8 @@ Last updated: 2026-10-26
 - A13 done: the tool-cache test builds its expected path with `path.join`; 6 of 6 tests pass on Windows and Linux.
 - Core is feature-complete for its work order (exit code 2 for errors, report-only stdout, live network caps). The docs site's setup page shows the interim workflow: build core from source, pass `binary-path`.
 - A10 done: CI rebuilds `dist/` and fails if it differs from the committed copy.
-- Next up: A8 (core now exits 2 on errors, so the Action can stop reporting them as regressions).
+- A8 done: regression is decided by core's exit code only; a core error fails the step with core's stderr, posts no comment and saves no cache.
+- Next up: phase 1 leftovers (A4 license, A6 unused `lib/`, A7 README checkout/token, A12 stale repo docs, A11 Node runtime), then phase 2 (A5 baseline restore, A9 update one comment).
 
 ## Blocked on core
 
@@ -36,7 +37,7 @@ The Action can't be finished end to end until core has:
 
 ## Phase 3: Correct regression signal (core C4 done in core #15)
 
-- [ ] A8: decide "regression" from core's exit code only (1 = regression, 2 = error → `core.setFailed` with the error, no regression comment); drop the stdout text match and its test
+- [x] A8: decide "regression" from core's exit code only (1 = regression, 2 = error → `core.setFailed` with the error, no regression comment); drop the stdout text match and its test
 
 ## Phase 4: Usable by others (needs core C12)
 
