@@ -68,7 +68,7 @@ npm ci
 npm test            # jest
 npm run build       # ncc build, writes dist/
 ```
-After any change under `src/`, run the build and commit the updated `dist/` in the same PR. A stale `dist/` means runners execute old code. Run on 2026-10-27 (Windows) after A8: `npm test` 8 of 8 pass, and `dist/` was rebuilt from `src/` and committed. Tests that check paths build the expected value with `path.join`, so they pass on any OS.
+After any change under `src/`, run the build and commit the updated `dist/` in the same PR. A stale `dist/` means runners execute old code. Run on 2026-10-27 (Windows) after A8: `npm test` 8 of 8 pass, and `dist/` was rebuilt from `src/` and committed. `dist/` is in `.gitignore`, so a plain `git add dist/index.js` is refused and aborts the whole `git add`; stage it with `git add -f dist/index.js`. Tests that check paths build the expected value with `path.join`, so they pass on any OS.
 
 ## 6. Rules
 
