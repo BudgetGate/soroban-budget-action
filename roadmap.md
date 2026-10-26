@@ -33,7 +33,7 @@ The Action can't be finished end to end until core has:
 - [ ] A5: restore the cached baseline before comparing (Actions cache, as decided in the workspace `roadmap.md`); typed `@actions/cache` import
 - [ ] A9: find and update the existing Budget Gate comment by a hidden HTML marker instead of posting a new one
 
-## Phase 3: Correct regression signal (needs core C4)
+## Phase 3: Correct regression signal (core C4 done in core #15)
 
 - [ ] A8: decide "regression" from core's exit code only (1 = regression, 2 = error → `core.setFailed` with the error, no regression comment); drop the stdout text match and its test
 
