@@ -1,6 +1,6 @@
 # CLAUDE.md — soroban-budget-action
 
-Scope: this repo only. If the workspace-level `CLAUDE.md` exists in the parent folder, read it as well. Where the two differ, this file wins for this repo. The defect table below was checked against `origin/main` on 2026-10-26. Re-verify an item before relying on it.
+Scope: this repo only. If the workspace-level `CLAUDE.md` exists in the parent folder, read it as well. Where the two differ, this file wins for this repo. The defect table below was checked against `origin/main` (`c03f4c2`) on 2026-10-26. Re-verify an item before relying on it.
 
 ## 1. What this repo is
 
@@ -13,9 +13,11 @@ Boundaries:
 - Network access limited to the GitHub API and downloading the core binary.
 - No SDK calls to Soroban RPC from this repo.
 
+User docs live in the separate `BudgetGate/docs` site (budgetgate.github.io/docs/), which describes this repo as of `c03f4c2`, including the limitations in section 3. A PR here that changes inputs, outputs, the comment or failure behaviour needs a matching docs PR, linked from both descriptions.
+
 ## 2. Known layout
 
-State of `main` on 2026-10-26. `package.json` name `soroban-budget-action`, version `1.0.0`.
+State of `main` (`c03f4c2`) on 2026-10-26. `package.json` name `soroban-budget-action`, version `1.0.0`.
 
 | Item | Detail (read in full unless stated) |
 |------|--------|
@@ -27,13 +29,13 @@ State of `main` on 2026-10-26. `package.json` name `soroban-budget-action`, vers
 | `lib/index.js` | Committed (August), referenced by nothing (A6). |
 | `examples/` | `rust-project.yml`, `monorepo.yml`. Both use `@v1` and `fixture-path`, and set neither `binary-path` nor `binary-version`. |
 | `.github/workflows/ci.yml` | `Action CI`, job `build-and-test`: Node 20, `npm ci`, `npm run build`, `npm test`. Runs on push/PR to `main` only. |
-| Other | `website/` (unexplained Vite app), `DOCUMENTATION.md`, `PR_BODY.md`, `pr_body_action.md`, `CONTRIBUTING.md`, `SECURITY.md`. Not reviewed. |
+| Other | `website/` (unexplained Vite app; its README is the unedited Vite template), `DOCUMENTATION.md`, `PR_BODY.md`, `pr_body_action.md` (A12), `CONTRIBUTING.md` (generic; says Go 1.21+, copied from core), `SECURITY.md` (reporting address `security@budgetgate.io`, not checked to be deliverable; states the project is unaudited). |
 | Dependencies | `@actions/cache ^6.2.0`, `@actions/core ^1.10.1`, `@actions/exec ^1.1.1`, `@actions/github ^5.1.1`, `@actions/tool-cache ^2.0.1` |
 | Dev dependencies | `@vercel/ncc ^0.44.1`, `jest ^30.4.2`, `ts-jest ^29.4.12`, `typescript ^5.5.4`, `esbuild`, `@types/jest`, `@types/node ^26.1.2` |
 
 ## 3. Known defects
 
-Checked 2026-10-26 against `origin/main`.
+Checked 2026-10-26 against `origin/main` (`c03f4c2`).
 
 | ID | Defect | Evidence |
 |----|--------|----------|
@@ -48,12 +50,14 @@ Checked 2026-10-26 against `origin/main`.
 | A9 | Posts a new PR comment on every run instead of updating one found by a hidden marker. | `src/index.ts` `createComment` |
 | A10 | CI does not check that `dist/` matches `src/`. | `.github/workflows/ci.yml` |
 | A11 | Unverified: `runs.using: node20` may be deprecated on GitHub-hosted runners. Check GitHub's current Node runtime support before the first release. | `action.yml` |
+| A12 | `DOCUMENTATION.md` describes behaviour that does not exist: `SOROBAN_BUDGET_DEBUG` / `SOROBAN_RPC_TIMEOUT` env vars, 3 RPC retries, "missing baseline exits 0", updating the existing comment, falling back to the console when commenting fails, a summary/advice comment layout, memory in the diff. It duplicates the docs site. `PR_BODY.md` and `pr_body_action.md` are stale PR descriptions; `pr_body_action.md` claims PRs "consume the previously cached baseline", which nothing does (A5). | `DOCUMENTATION.md`, `pr_body_action.md`, `src/index.ts` |
+| A13 | The test "downloads binary via tool-cache when binary-version is provided" fails on Windows: `src/index.ts` builds the cached path with `path.join` (backslashes on Windows) and the test expects `/tmp/cached/budget-core`. CI runs on Linux and passes. | `npm test` on Windows 2026-10-26: 5 pass, 1 fail; `Action CI` green on `c03f4c2` |
 
 ## 4. Work order for this repo
 
-Blocked on core for real data. Core must land its measurement fixes (core PR #9, #8), exit code 2 (core C4) and a release binary (core C12) before A1/A2/A8 can be finished and tested end to end.
+Core's real measurement has landed (core #9, #8; verified on testnet), so the Action can be run against real numbers today by building core from source and passing `binary-path` (the docs site's setup page does this). Still blocked on core: exit code 2 (core C4) for A8, and a release binary (core C12) for A2/A3.
 
-1. Not blocked: A4, A6, A7, A10 (license, unused `lib/`, README accuracy, dist-sync check in CI).
+1. Not blocked: A4, A6, A7, A10, A12, A13 (license, unused `lib/`, README accuracy, dist-sync check in CI, stale repo docs, Windows-safe test).
 2. A5: implement baseline restore (Actions cache, as decided) and type the `@actions/cache` import.
 3. A9: update one PR comment by hidden marker.
 4. A8: decide regression from core's exit code only, once core has exit code 2.
@@ -68,7 +72,7 @@ npm ci
 npm test            # jest
 npm run build       # ncc build, writes dist/
 ```
-After any change under `src/`, run the build and commit the updated `dist/` in the same PR. A stale `dist/` means runners execute old code. `npm test` (6 passing) and the `ncc` build were run on 2026-10-26.
+After any change under `src/`, run the build and commit the updated `dist/` in the same PR. A stale `dist/` means runners execute old code. Run on `c03f4c2` on 2026-10-26 (Windows): `npm test` 5 of 6 pass (A13; all 6 pass in Linux CI), `npm run build` leaves `dist/` unchanged, so it is in sync with `src/`.
 
 ## 6. Rules
 

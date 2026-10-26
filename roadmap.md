@@ -6,22 +6,25 @@ Last updated: 2026-10-26
 
 ## Where I left off
 
-- No work has started in this repo yet. `main` is at `ec034b6`, with tests passing and `dist/` in sync with `src/`.
-- Most of this repo is blocked on `soroban-budget-core`. The items marked "not blocked" can be done anytime.
+- No code work has started in this repo yet. `main` is at `c03f4c2` (docs-only PR #4 on top of `ec034b6`). `dist/` is in sync with `src/`. Tests: 6 of 6 pass in Linux CI, 5 of 6 on Windows (A13).
+- Core's real measurement has landed, so phase 1 and phase 2 can start now. The docs site's setup page shows the interim workflow: build core from source, pass `binary-path`.
+- Next up: phase 1, starting with A13 (so tests pass on every OS) and A10 (so a stale `dist/` can't slip in).
 
 ## Blocked on core
 
-The Action can't be tested end to end until core has:
-- [ ] Real measurement merged to `main` (core PR #9 and #8)
+The Action can't be finished end to end until core has:
+- [x] Real measurement merged to `main` (core #9 and #8, verified on testnet 2026-10-26)
 - [ ] Exit code 2 for errors (core C4)
 - [ ] A release containing `budget-core-linux-amd64` (core C12)
 
 ## Phase 1: Repo accuracy (not blocked)
 
+- [ ] A13: make the tool-cache test pass on Windows (path separators)
+- [ ] A10: CI step that rebuilds `dist/` and fails if it differs from the committed copy
 - [ ] A4: `package.json` license `MIT` and a real description
 - [ ] A6: remove the unused `lib/index.js`
 - [ ] A7: README example uses `actions/checkout@v4`; resolve `github-token` being both required and defaulted
-- [ ] A10: CI step that rebuilds `dist/` and fails if it differs from the committed copy
+- [ ] A12: replace `DOCUMENTATION.md` with a link to the docs site (or make it accurate); remove `PR_BODY.md` and `pr_body_action.md`
 - [ ] A11: check whether `runs.using: node20` is still supported; move to the current runtime if not
 
 ## Phase 2: Baseline persistence and PR comment
@@ -44,3 +47,4 @@ The Action can't be tested end to end until core has:
 
 - [ ] Branch protection on `main`: currently 0 required reviews and no required status checks. Consider requiring `Action CI / build-and-test`.
 - [ ] Repo topics and description.
+- [ ] Delete branches `docs/claude-md-and-roadmap` and `feature/complete-missing-specs`; both are fully in `main` (checked 2026-10-26).
