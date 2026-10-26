@@ -6,20 +6,21 @@ Last updated: 2026-10-26
 
 ## Where I left off
 
-- No code work has started in this repo yet. `main` is at `c03f4c2` (docs-only PR #4 on top of `ec034b6`). `dist/` is in sync with `src/`. Tests: 6 of 6 pass in Linux CI, 5 of 6 on Windows (A13).
-- Core's real measurement has landed, so phase 1 and phase 2 can start now. The docs site's setup page shows the interim workflow: build core from source, pass `binary-path`.
-- Next up: phase 1, starting with A13 (so tests pass on every OS) and A10 (so a stale `dist/` can't slip in).
+- `main` is at `bf1a289`. `dist/` is in sync with `src/`.
+- A13 done: the tool-cache test builds its expected path with `path.join`; 6 of 6 tests pass on Windows and Linux.
+- Core is feature-complete for its work order (exit code 2 for errors, report-only stdout, live network caps). The docs site's setup page shows the interim workflow: build core from source, pass `binary-path`.
+- Next up: A10 (CI check that `dist/` matches `src/`), then A8 (core now exits 2 on errors, so the Action can stop reporting them as regressions).
 
 ## Blocked on core
 
 The Action can't be finished end to end until core has:
 - [x] Real measurement merged to `main` (core #9 and #8, verified on testnet 2026-10-26)
-- [ ] Exit code 2 for errors (core C4)
+- [x] Exit code 2 for errors (core C4, core #15)
 - [ ] A release containing `budget-core-linux-amd64` (core C12)
 
 ## Phase 1: Repo accuracy (not blocked)
 
-- [ ] A13: make the tool-cache test pass on Windows (path separators)
+- [x] A13: make the tool-cache test pass on Windows (path separators)
 - [ ] A10: CI step that rebuilds `dist/` and fails if it differs from the committed copy
 - [ ] A4: `package.json` license `MIT` and a real description
 - [ ] A6: remove the unused `lib/index.js`
@@ -32,7 +33,7 @@ The Action can't be finished end to end until core has:
 - [ ] A5: restore the cached baseline before comparing (Actions cache, as decided in the workspace `roadmap.md`); typed `@actions/cache` import
 - [ ] A9: find and update the existing Budget Gate comment by a hidden HTML marker instead of posting a new one
 
-## Phase 3: Correct regression signal (needs core C4)
+## Phase 3: Correct regression signal (core C4 done in core #15)
 
 - [ ] A8: decide "regression" from core's exit code only (1 = regression, 2 = error → `core.setFailed` with the error, no regression comment); drop the stdout text match and its test
 

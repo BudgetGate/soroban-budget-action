@@ -2,6 +2,7 @@ import * as core from '@actions/core';
 import * as github from '@actions/github';
 import * as exec from '@actions/exec';
 import * as tc from '@actions/tool-cache';
+import * as path from 'path';
 import { run } from '../src/index';
 
 jest.mock('@actions/core');
@@ -171,9 +172,11 @@ describe('soroban-budget-action', () => {
 
     expect(mockDownloadTool).toHaveBeenCalledWith('https://github.com/BudgetGate/soroban-budget-core/releases/download/v1.2.3/budget-core-linux-amd64');
     expect(mockCacheFile).toHaveBeenCalledWith('/tmp/downloaded', 'budget-core', 'soroban-budget-core', '1.2.3');
-    expect(mockExec).toHaveBeenCalledWith('chmod', ['+x', '/tmp/cached/budget-core']);
+    // The binary path is built with path.join, so it uses the runner's separator.
+    const cachedBinary = path.join('/tmp/cached', 'budget-core');
+    expect(mockExec).toHaveBeenCalledWith('chmod', ['+x', cachedBinary]);
     expect(mockExec).toHaveBeenCalledWith(
-      '/tmp/cached/budget-core',
+      cachedBinary,
       ['--baseline', 'base.json', '--fixture', 'fixture.json', '--rpc-url', 'https://rpc.example', '--output-json', 'new.json'],
       expect.any(Object)
     );

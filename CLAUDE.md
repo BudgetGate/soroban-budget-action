@@ -51,16 +51,15 @@ Checked 2026-10-26 against `origin/main` (`c03f4c2`).
 | A10 | CI does not check that `dist/` matches `src/`. | `.github/workflows/ci.yml` |
 | A11 | Unverified: `runs.using: node20` may be deprecated on GitHub-hosted runners. Check GitHub's current Node runtime support before the first release. | `action.yml` |
 | A12 | `DOCUMENTATION.md` describes behaviour that does not exist: `SOROBAN_BUDGET_DEBUG` / `SOROBAN_RPC_TIMEOUT` env vars, 3 RPC retries, "missing baseline exits 0", updating the existing comment, falling back to the console when commenting fails, a summary/advice comment layout, memory in the diff. It duplicates the docs site. `PR_BODY.md` and `pr_body_action.md` are stale PR descriptions; `pr_body_action.md` claims PRs "consume the previously cached baseline", which nothing does (A5). | `DOCUMENTATION.md`, `pr_body_action.md`, `src/index.ts` |
-| A13 | The test "downloads binary via tool-cache when binary-version is provided" fails on Windows: `src/index.ts` builds the cached path with `path.join` (backslashes on Windows) and the test expects `/tmp/cached/budget-core`. CI runs on Linux and passes. | `npm test` on Windows 2026-10-26: 5 pass, 1 fail; `Action CI` green on `c03f4c2` |
 
 ## 4. Work order for this repo
 
-Core's real measurement has landed (core #9, #8; verified on testnet), so the Action can be run against real numbers today by building core from source and passing `binary-path` (the docs site's setup page does this). Still blocked on core: exit code 2 (core C4) for A8, and a release binary (core C12) for A2/A3.
+Core's real measurement has landed (core #9, #8; verified on testnet), so the Action can be run against real numbers today by building core from source and passing `binary-path` (the docs site's setup page does this). Core now exits 0 pass / 1 regression / 2 error (core #15), so A8 is unblocked. Still blocked on core: a release binary (core C12) for A2/A3.
 
-1. Not blocked: A4, A6, A7, A10, A12, A13 (license, unused `lib/`, README accuracy, dist-sync check in CI, stale repo docs, Windows-safe test).
+1. Not blocked: A4, A6, A7, A10, A12 (license, unused `lib/`, README accuracy, dist-sync check in CI, stale repo docs).
 2. A5: implement baseline restore (Actions cache, as decided) and type the `@actions/cache` import.
 3. A9: update one PR comment by hidden marker.
-4. A8: decide regression from core's exit code only, once core has exit code 2.
+4. A8: decide regression from core's exit code only (core has exit code 2 since core #15).
 5. A1, A2, A3: README and examples that actually run, then a release when asked.
 
 `roadmap.md` tracks progress against this list.
@@ -72,7 +71,7 @@ npm ci
 npm test            # jest
 npm run build       # ncc build, writes dist/
 ```
-After any change under `src/`, run the build and commit the updated `dist/` in the same PR. A stale `dist/` means runners execute old code. Run on `c03f4c2` on 2026-10-26 (Windows): `npm test` 5 of 6 pass (A13; all 6 pass in Linux CI), `npm run build` leaves `dist/` unchanged, so it is in sync with `src/`.
+After any change under `src/`, run the build and commit the updated `dist/` in the same PR. A stale `dist/` means runners execute old code. Run on 2026-10-27 (Windows) after A13: `npm test` 6 of 6 pass, `npm run build` leaves `dist/` unchanged, so it is in sync with `src/`. Tests that check paths build the expected value with `path.join`, so they pass on any OS.
 
 ## 6. Rules
 
