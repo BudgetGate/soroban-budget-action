@@ -43,13 +43,15 @@ Checked 2026-10-26 against `origin/main` (`c03f4c2`).
 | A2 | No usable core binary. `binary-version` downloads from a core release that does not exist (core C12); without it, `binary-path` defaults to `./budget-core`, which a user's repo does not have. The examples set neither, so they cannot run. | `src/index.ts`, `examples/*.yml` |
 | A3 | README and `examples/*.yml` use `@v1`. Only tag is `v0.1.0`; no releases. | GitHub API |
 | A14 | After a core error, the PR keeps the previous run's report comment (e.g. "Passing"), so the comment can show a stale result while the latest check failed. The failed step is visible in the checks list, not in the comment. Open question: update the existing comment with "latest run failed: …", or leave it. | `src/index.ts` (no comment on exit ≠ 0/1); local run against a fake GitHub API 2026-10-27 |
+| A19 | This repo's own `ci.yml` pins `actions/checkout@v4`, `actions/setup-node@v4` and `actions/upload-artifact@v4`, which declare `node20`. The runner forces them onto Node 24 and warns on every run: "Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-node@v4". Current majors (2026-10-27): checkout v7, setup-node v7.1.0, upload-artifact v7.0.2. | CI log of PR #20 (job 122105764313); each action's `action.yml` at `v4` |
 
 ## 4. Work order for this repo
 
 Core's real measurement has landed (core #9, #8; verified on testnet), so the Action can be run against real numbers today by building core from source and passing `binary-path` (the docs site's setup page does this). Core exits 0 pass / 1 regression / 2 error (core #15), and the Action uses that (A8 fixed). Still blocked on core: a release binary (core C12) for A2/A3.
 
-1. A14: decide with the maintainer how the comment shows a failed run.
-2. A1, A2, A3: README and examples that actually run, then a release when asked.
+1. Not blocked: A19 (move `ci.yml`'s action pins to current majors).
+2. A14: decide with the maintainer how the comment shows a failed run.
+3. A1, A2, A3: README and examples that actually run, then a release when asked.
 
 `roadmap.md` tracks progress against this list.
 
