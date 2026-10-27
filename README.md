@@ -2,6 +2,8 @@
 
 `soroban-budget-action` is a GitHub Action for the **BudgetGate** suite. It executes the `soroban-budget-core` engine directly in your CI/CD pipelines to track Soroban smart contract resource usage, prevent regressions, and automatically post detailed markdown reports as Pull Request comments.
 
+**Documentation:** [budgetgate.github.io/docs](https://budgetgate.github.io/docs/action/). The [setup page](https://budgetgate.github.io/docs/action/setup) shows the current workflow, which builds core from source because core has no release yet. The example below predates it.
+
 ## 🚀 Features
 
 - **Automated Regression Prevention:** Fails your CI workflow if a resource regression is detected (e.g. CPU instructions jump significantly).
