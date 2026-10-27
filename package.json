@@ -2,7 +2,7 @@
   "name": "soroban-budget-action",
   "version": "1.0.0",
   "description": "GitHub Action that runs soroban-budget-core on pull requests and comments with Soroban resource-cost regressions.",
-  "main": "index.js",
+  "main": "dist/index.js",
   "scripts": {
     "test": "jest",
     "build": "ncc build src/index.ts -o dist --license licenses.txt"
@@ -12,7 +12,7 @@
     "url": "git+https://github.com/BudgetGate/soroban-budget-action.git"
   },
   "keywords": [],
-  "author": "",
+  "author": "Budget Gate",
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/BudgetGate/soroban-budget-action/issues"
