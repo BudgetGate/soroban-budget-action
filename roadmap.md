@@ -11,7 +11,9 @@ Last updated: 2026-10-26
 - Core is feature-complete for its work order (exit code 2 for errors, report-only stdout, live network caps). The docs site's setup page shows the interim workflow: build core from source, pass `binary-path`.
 - A10 done: CI rebuilds `dist/` and fails if it differs from the committed copy.
 - A8 done: regression is decided by core's exit code only; a core error fails the step with core's stderr, posts no comment and saves no cache.
-- Next up: phase 1 leftovers (A4 license, A6 unused `lib/`, A7 README checkout/token, A12 stale repo docs, A11 Node runtime), then phase 2 (A5 baseline restore, A9 update one comment).
+- A9 done: one report comment per PR, found by the hidden marker `<!-- budgetgate-report -->` and updated on each run.
+- Open question (A14): after a core error the previous report comment stays; should it be updated to say the run failed?
+- Next up: phase 1 leftovers (A4 license, A6 unused `lib/`, A7 README checkout/token, A12 stale repo docs, A11 Node runtime), then A5 (baseline restore).
 
 ## Blocked on core
 
@@ -33,7 +35,8 @@ The Action can't be finished end to end until core has:
 ## Phase 2: Baseline persistence and PR comment
 
 - [ ] A5: restore the cached baseline before comparing (Actions cache, as decided in the workspace `roadmap.md`); typed `@actions/cache` import
-- [ ] A9: find and update the existing Budget Gate comment by a hidden HTML marker instead of posting a new one
+- [x] A9: find and update the existing Budget Gate comment by a hidden HTML marker instead of posting a new one
+- [ ] A14: decide how the comment shows a failed run (today it keeps the previous report)
 
 ## Phase 3: Correct regression signal (core C4 done in core #15)
 
