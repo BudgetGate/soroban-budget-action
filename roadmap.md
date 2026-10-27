@@ -12,7 +12,7 @@ Last updated: 2026-10-27
 - A10 done: CI rebuilds `dist/` and fails if it differs from the committed copy.
 - A8 done: regression is decided by core's exit code only; a core error fails the step with core's stderr, posts no comment and saves no cache.
 - A9 done: one report comment per PR, found by the hidden marker `<!-- budgetgate-report -->` and updated on each run.
-- Open question (A14): after a core error the previous report comment stays; should it be updated to say the run failed?
+- A14 decided by the maintainer (2026-10-27): after a core error the PR comment says the latest run failed.
 - A5 done: the baseline comes from `baseline-path` if the file exists, else the Actions cache (saved on every default-branch push), else an empty baseline with a visible note. Found and fixed on the way: `@actions/cache` 6.2.0 is ESM-only, so the bundle never contained it and saving had never worked; pinned `^5.3.0` (CommonJS).
 - A4 done: `package.json` and the lockfile root say `MIT`, matching `LICENSE`; `description` filled in.
 - A6 done: the stale `tsc` output `lib/index.js` (2026-09-15) is removed and `lib/` is gitignored.
@@ -25,7 +25,8 @@ Last updated: 2026-10-27
 - A11 done: `runs.using: node24`, CI on Node 24. GitHub made Node 24 the runner default on 2026-06-16 (forcing `node20` actions onto it with an annotation) and removed Node 20 on 2026-09-23.
 - Found while doing A11: CI's own action pins (`checkout`, `setup-node`, `upload-artifact` at `@v4`) target Node 20 and are forced onto Node 24 with a warning (A19).
 - A19 done: `ci.yml` uses `actions/checkout@v7`, `setup-node@v7` and `upload-artifact@v7` (all `node24`), so CI no longer warns about Node 20.
-- Next up: everything left needs a maintainer decision: A14 (comment after a failed run), a test repository, and a core release (C12) for A1–A3.
+- A14 done: after a core error (exit code other than 0 or 1) the marked comment is updated, or created, with "The latest run failed", the exit code and a link to the workflow run; the earlier report is replaced. Core's stderr is not posted (it can contain the RPC URL) and stays in the step failure. Not run on a real PR yet.
+- Next up: needs a maintainer decision: a test repository, and a core release (C12) for A1–A3.
 - Not verified anywhere yet: a real cache round trip (save on a default-branch push, restore on a PR). That needs a workflow in a real repository.
 
 ## Blocked on core
@@ -54,7 +55,7 @@ The Action can't be finished end to end until core has:
 
 - [x] A5: restore the cached baseline before comparing (Actions cache, as decided in the workspace `roadmap.md`); typed `@actions/cache` import
 - [x] A9: find and update the existing Budget Gate comment by a hidden HTML marker instead of posting a new one
-- [ ] A14: decide how the comment shows a failed run (today it keeps the previous report)
+- [x] A14: after a core error the comment says the latest run failed
 
 ## Phase 3: Correct regression signal (core C4 done in core #15)
 
