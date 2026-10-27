@@ -2,11 +2,11 @@
 
 Progress tracker for this repo. The defect IDs (A1, A2, …) and their evidence are in `CLAUDE.md` section 3; the order comes from `CLAUDE.md` section 4. Tick a box only when the change is merged to `main`.
 
-Last updated: 2026-10-26
+Last updated: 2026-10-27
 
 ## Where I left off
 
-- `main` is at `bf1a289`. `dist/` is in sync with `src/`.
+- `main` is at `fe5a2c8` (after #10). `dist/` is in sync with `src/` (rebuilt with ncc on Linux and diffed 2026-10-27); 21 of 21 tests pass.
 - A13 done: the tool-cache test builds its expected path with `path.join`; 6 of 6 tests pass on Windows and Linux.
 - Core is feature-complete for its work order (exit code 2 for errors, report-only stdout, live network caps). The docs site's setup page shows the interim workflow: build core from source, pass `binary-path`.
 - A10 done: CI rebuilds `dist/` and fails if it differs from the committed copy.
