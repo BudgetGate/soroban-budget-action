@@ -6,7 +6,7 @@ Last updated: 2026-10-27
 
 ## Where I left off
 
-- `main` is at `afffb10` (after #13 and #11). `dist/` is in sync with `src/` (rebuilt with ncc on Linux and diffed 2026-10-27); 21 of 21 tests pass.
+- `main` is at `ad30d62` (after #14). `dist/` is in sync with `src/` (rebuilt with ncc on Linux and diffed 2026-10-27); 21 of 21 tests pass.
 - A13 done: the tool-cache test builds its expected path with `path.join`; 6 of 6 tests pass on Windows and Linux.
 - Core is feature-complete for its work order (exit code 2 for errors, report-only stdout, live network caps). The docs site's setup page shows the interim workflow: build core from source, pass `binary-path`.
 - A10 done: CI rebuilds `dist/` and fails if it differs from the committed copy.
@@ -17,7 +17,8 @@ Last updated: 2026-10-27
 - A4 done: `package.json` and the lockfile root say `MIT`, matching `LICENSE`; `description` filled in.
 - A6 done: the stale `tsc` output `lib/index.js` (2026-09-15) is removed and `lib/` is gitignored.
 - A15 done: `package.json` `main` is `dist/index.js` (same as `action.yml`), `author` is Budget Gate.
-- Next up: phase 1 leftovers (A7 README checkout/token, A12 stale repo docs, A11 Node runtime). A14 waits for the maintainer.
+- A7 done: README pins `actions/checkout@v4` like the examples; `github-token` is `required: false` in `action.yml` and the README (it always has the workflow token as default).
+- Next up: phase 1 leftovers (A16 `actions/checkout` pins, A12 stale repo docs, A11 Node runtime). A14 waits for the maintainer.
 - Not verified anywhere yet: a real cache round trip (save on a default-branch push, restore on a PR). That needs a workflow in a real repository.
 
 ## Blocked on core
@@ -34,7 +35,8 @@ The Action can't be finished end to end until core has:
 - [x] A4: `package.json` license `MIT` and a real description
 - [x] A15: `package.json` `main` points at a real file (or is removed); `author` set
 - [x] A6: remove the unused `lib/index.js` (stale `tsc` output) and gitignore `lib/`
-- [ ] A7: README example uses `actions/checkout@v4`; resolve `github-token` being both required and defaulted
+- [x] A7: README example uses `actions/checkout@v4`; resolve `github-token` being both required and defaulted
+- [ ] A16: move every `actions/checkout` pin (README, examples, docs site) to the current major
 - [ ] A12: replace `DOCUMENTATION.md` with a link to the docs site (or make it accurate); remove `PR_BODY.md` and `pr_body_action.md`
 - [ ] A11: check whether `runs.using: node20` is still supported; move to the current runtime if not
 
