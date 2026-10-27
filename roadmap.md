@@ -13,7 +13,9 @@ Last updated: 2026-10-26
 - A8 done: regression is decided by core's exit code only; a core error fails the step with core's stderr, posts no comment and saves no cache.
 - A9 done: one report comment per PR, found by the hidden marker `<!-- budgetgate-report -->` and updated on each run.
 - Open question (A14): after a core error the previous report comment stays; should it be updated to say the run failed?
-- Next up: phase 1 leftovers (A4 license, A6 unused `lib/`, A7 README checkout/token, A12 stale repo docs, A11 Node runtime), then A5 (baseline restore).
+- A5 done: the baseline comes from `baseline-path` if the file exists, else the Actions cache (saved on every default-branch push), else an empty baseline with a visible note. Found and fixed on the way: `@actions/cache` 6.2.0 is ESM-only, so the bundle never contained it and saving had never worked; pinned `^5.3.0` (CommonJS).
+- Next up: phase 1 leftovers (A4 license, A6 unused `lib/`, A7 README checkout/token, A12 stale repo docs, A11 Node runtime). A14 waits for the maintainer.
+- Not verified anywhere yet: a real cache round trip (save on a default-branch push, restore on a PR). That needs a workflow in a real repository.
 
 ## Blocked on core
 
@@ -34,7 +36,7 @@ The Action can't be finished end to end until core has:
 
 ## Phase 2: Baseline persistence and PR comment
 
-- [ ] A5: restore the cached baseline before comparing (Actions cache, as decided in the workspace `roadmap.md`); typed `@actions/cache` import
+- [x] A5: restore the cached baseline before comparing (Actions cache, as decided in the workspace `roadmap.md`); typed `@actions/cache` import
 - [x] A9: find and update the existing Budget Gate comment by a hidden HTML marker instead of posting a new one
 - [ ] A14: decide how the comment shows a failed run (today it keeps the previous report)
 

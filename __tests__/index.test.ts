@@ -1,10 +1,14 @@
+import * as cache from '@actions/cache';
 import * as core from '@actions/core';
 import * as github from '@actions/github';
 import * as exec from '@actions/exec';
 import * as tc from '@actions/tool-cache';
+import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
-import { run, COMMENT_MARKER } from '../src/index';
+import { run, COMMENT_MARKER, BASELINE_CACHE_PATH, BASELINE_CACHE_PREFIX } from '../src/index';
 
+jest.mock('@actions/cache');
 jest.mock('@actions/core');
 jest.mock('@actions/github');
 jest.mock('@actions/exec');
@@ -21,9 +25,22 @@ describe('soroban-budget-action', () => {
   let mockPaginate: jest.Mock;
   let mockDownloadTool: jest.Mock;
   let mockCacheFile: jest.Mock;
+  let mockRestoreCache: jest.Mock;
+  let mockSaveCache: jest.Mock;
+  let originalCwd: string;
 
   beforeEach(() => {
     jest.clearAllMocks();
+
+    // Each test runs in its own empty directory: the Action reads and writes baseline files.
+    originalCwd = process.cwd();
+    process.chdir(fs.mkdtempSync(path.join(os.tmpdir(), 'budgetgate-action-')));
+
+    mockRestoreCache = cache.restoreCache as jest.Mock;
+    mockSaveCache = cache.saveCache as jest.Mock;
+    // No cached baseline unless a test says otherwise.
+    mockRestoreCache.mockResolvedValue(undefined);
+    mockSaveCache.mockResolvedValue(1);
 
     mockGetInput = core.getInput as jest.Mock;
     mockSetFailed = core.setFailed as jest.Mock;
@@ -54,18 +71,26 @@ describe('soroban-budget-action', () => {
         payload: {
           pull_request: {
             number: 123,
+            base: { sha: 'basesha' },
           },
         },
         repo: {
           owner: 'test-owner',
           repo: 'test-repo',
         },
+        sha: 'headsha',
+        ref: 'refs/pull/123/merge',
       },
       writable: true,
     });
   });
 
+  afterEach(() => {
+    process.chdir(originalCwd);
+  });
+
   it('runs the binary successfully and posts a comment with no regression', async () => {
+    fs.writeFileSync('base.json', '{"schema_version":"2.0","functions":[]}');
     mockGetInput.mockImplementation((name: string) => {
       switch (name) {
         case 'github-token': return 'fake-token';
@@ -254,6 +279,7 @@ old report` }]);
     expect(mockSetFailed).toHaveBeenCalledWith(errorMsg);
   });
   it('downloads binary via tool-cache when binary-version is provided', async () => {
+    fs.writeFileSync('base.json', '{"schema_version":"2.0","functions":[]}');
     mockGetInput.mockImplementation((name: string) => {
       switch (name) {
         case 'github-token': return 'fake-token';
@@ -282,5 +308,138 @@ old report` }]);
       ['--baseline', 'base.json', '--fixture', 'fixture.json', '--rpc-url', 'https://rpc.example', '--output-json', 'new.json'],
       expect.any(Object)
     );
+  });
+
+  describe('baseline', () => {
+    const EMPTY = '{"schema_version":"2.0","functions":[]}';
+    const baselineArg = () => {
+      const call = mockExec.mock.calls.find((c) => Array.isArray(c[1]) && c[1][0] === '--baseline');
+      return call ? call[1][1] : undefined;
+    };
+    const inputs = (overrides: Record<string, string> = {}) => (name: string) =>
+      ({ 'github-token': 'fake-token', 'baseline-path': 'baseline.json', 'fixture-path': 'fixture.json', 'binary-path': './budget-core', ...overrides } as Record<string, string>)[name] ?? '';
+
+    it('uses the baseline file when it exists, without touching the cache', async () => {
+      fs.writeFileSync('baseline.json', EMPTY);
+      mockGetInput.mockImplementation(inputs());
+      mockExec.mockResolvedValue(0);
+
+      await run();
+
+      expect(baselineArg()).toBe('baseline.json');
+      expect(mockRestoreCache).not.toHaveBeenCalled();
+    });
+
+    it('restores the cached baseline for the PR base commit when there is no file', async () => {
+      mockGetInput.mockImplementation(inputs());
+      mockRestoreCache.mockResolvedValue(`${BASELINE_CACHE_PREFIX}basesha`);
+      mockExec.mockResolvedValue(0);
+
+      await run();
+
+      expect(mockRestoreCache).toHaveBeenCalledWith([BASELINE_CACHE_PATH], `${BASELINE_CACHE_PREFIX}basesha`, [BASELINE_CACHE_PREFIX]);
+      expect(baselineArg()).toBe(BASELINE_CACHE_PATH);
+      expect(mockCreateComment).toHaveBeenCalledWith(expect.objectContaining({ body: expect.not.stringContaining('No baseline found') }));
+    });
+
+    it('falls back to an empty baseline with a visible note when nothing is cached', async () => {
+      mockGetInput.mockImplementation(inputs());
+      mockExec.mockResolvedValue(0);
+
+      await run();
+
+      expect(baselineArg()).toBe(BASELINE_CACHE_PATH);
+      expect(fs.readFileSync(BASELINE_CACHE_PATH, 'utf8').trim()).toBe(EMPTY);
+      expect(core.warning).toHaveBeenCalledWith(expect.stringContaining('no cached baseline'));
+      expect(mockCreateComment).toHaveBeenCalledWith(expect.objectContaining({ body: expect.stringContaining('No baseline found') }));
+    });
+
+    it('falls back to an empty baseline when the cache service fails', async () => {
+      mockGetInput.mockImplementation(inputs());
+      mockRestoreCache.mockRejectedValue(new Error('cache service unavailable'));
+      mockExec.mockResolvedValue(0);
+
+      await run();
+
+      expect(baselineArg()).toBe(BASELINE_CACHE_PATH);
+      expect(core.warning).toHaveBeenCalledWith(expect.stringContaining('cache service unavailable'));
+      expect(mockSetFailed).not.toHaveBeenCalled();
+    });
+
+    describe('on a push', () => {
+      const push = (ref: string) => {
+        Object.defineProperty(github, 'context', {
+          value: {
+            payload: { repository: { default_branch: 'trunk' }, before: 'prevsha' },
+            repo: { owner: 'test-owner', repo: 'test-repo' },
+            sha: 'headsha',
+            ref,
+          },
+          writable: true,
+        });
+      };
+
+      it.each([
+        ['no regression', 0],
+        ['a regression (merged code is the new reference)', 1],
+      ])('saves the new snapshot to the default branch cache after %s', async (_label, exitCode) => {
+        push('refs/heads/trunk');
+        mockGetInput.mockImplementation(inputs());
+        mockExec.mockImplementation(async () => {
+          fs.writeFileSync('new.json', '{"schema_version":"2.0","functions":[{"name":"f"}]}');
+          return exitCode;
+        });
+
+        await run();
+
+        expect(mockSaveCache).toHaveBeenCalledWith([BASELINE_CACHE_PATH], `${BASELINE_CACHE_PREFIX}headsha`);
+        expect(fs.readFileSync(BASELINE_CACHE_PATH, 'utf8')).toContain('"name":"f"');
+      });
+
+      it('restores using the previous commit of the push', async () => {
+        push('refs/heads/trunk');
+        mockGetInput.mockImplementation(inputs());
+        mockExec.mockResolvedValue(0);
+
+        await run();
+
+        expect(mockRestoreCache).toHaveBeenCalledWith([BASELINE_CACHE_PATH], `${BASELINE_CACHE_PREFIX}prevsha`, [BASELINE_CACHE_PREFIX]);
+      });
+
+      it('does not save on another branch', async () => {
+        push('refs/heads/feature');
+        mockGetInput.mockImplementation(inputs());
+        mockExec.mockResolvedValue(0);
+
+        await run();
+
+        expect(mockSaveCache).not.toHaveBeenCalled();
+      });
+
+      it('does not save when core fails', async () => {
+        push('refs/heads/trunk');
+        mockGetInput.mockImplementation(inputs());
+        mockExec.mockResolvedValue(2);
+
+        await run();
+
+        expect(mockSaveCache).not.toHaveBeenCalled();
+      });
+
+      it('only warns when saving fails', async () => {
+        push('refs/heads/trunk');
+        mockGetInput.mockImplementation(inputs());
+        mockSaveCache.mockRejectedValue(new Error('reserve failed'));
+        mockExec.mockImplementation(async () => {
+          fs.writeFileSync('new.json', EMPTY);
+          return 0;
+        });
+
+        await run();
+
+        expect(core.warning).toHaveBeenCalledWith(expect.stringContaining('reserve failed'));
+        expect(mockSetFailed).not.toHaveBeenCalled();
+      });
+    });
   });
 });
