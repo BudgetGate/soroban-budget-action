@@ -32,5 +32,5 @@ outputs:
     description: 'Boolean string true if a regression was detected'
 
 runs:
-  using: 'node20'
+  using: 'node24'
   main: 'dist/index.js'

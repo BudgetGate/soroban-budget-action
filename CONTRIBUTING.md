@@ -2,7 +2,7 @@
 
 ## Local setup
 
-1. Install Node.js 20 (CI and the Action's runtime, `runs.using: node20`, both use it).
+1. Install Node.js 24 (CI and the Action's runtime, `runs.using: node24`, both use it).
 2. Clone the repository and install the locked dependencies:
    ```bash
    npm ci
