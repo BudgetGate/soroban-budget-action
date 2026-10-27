@@ -6,7 +6,7 @@ Last updated: 2026-10-27
 
 ## Where I left off
 
-- `main` is at `a8198a8` (after #19). `dist/` is in sync with `src/` (rebuilt with ncc on Linux and diffed 2026-10-27); 21 of 21 tests pass.
+- `main` is at `5b66e19` (after #20). `dist/` is in sync with `src/` (rebuilt with ncc on Linux and diffed 2026-10-27); 21 of 21 tests pass.
 - A13 done: the tool-cache test builds its expected path with `path.join`; 6 of 6 tests pass on Windows and Linux.
 - Core is feature-complete for its work order (exit code 2 for errors, report-only stdout, live network caps). The docs site's setup page shows the interim workflow: build core from source, pass `binary-path`.
 - A10 done: CI rebuilds `dist/` and fails if it differs from the committed copy.
@@ -24,7 +24,8 @@ Last updated: 2026-10-27
 - A18 done: `CONTRIBUTING.md` rewritten for this repo (Node 20, `npm ci`/`test`/`build`, committing `dist/` with `git add -f`, CI's `dist` artifact, the Action's rules).
 - A11 done: `runs.using: node24`, CI on Node 24. GitHub made Node 24 the runner default on 2026-06-16 (forcing `node20` actions onto it with an annotation) and removed Node 20 on 2026-09-23.
 - Found while doing A11: CI's own action pins (`checkout`, `setup-node`, `upload-artifact` at `@v4`) target Node 20 and are forced onto Node 24 with a warning (A19).
-- Next up: A19. After that everything left needs a maintainer decision: A14 (comment after a failed run), a test repository, and a core release (C12) for A1–A3.
+- A19 done: `ci.yml` uses `actions/checkout@v7`, `setup-node@v7` and `upload-artifact@v7` (all `node24`), so CI no longer warns about Node 20.
+- Next up: everything left needs a maintainer decision: A14 (comment after a failed run), a test repository, and a core release (C12) for A1–A3.
 - Not verified anywhere yet: a real cache round trip (save on a default-branch push, restore on a PR). That needs a workflow in a real repository.
 
 ## Blocked on core
@@ -47,7 +48,7 @@ The Action can't be finished end to end until core has:
 - [x] A17: remove the unused `website/` Vite template
 - [x] A18: `CONTRIBUTING.md` written for this TypeScript repo (Node, `npm ci`, `npm test`, `npm run build`, committing `dist/`)
 - [x] A11: check whether `runs.using: node20` is still supported; move to the current runtime if not
-- [ ] A19: move `ci.yml`'s `actions/*` pins to current majors (all three are `node20` at `@v4`)
+- [x] A19: move `ci.yml`'s `actions/*` pins to current majors (all three are `node20` at `@v4`)
 
 ## Phase 2: Baseline persistence and PR comment
 
