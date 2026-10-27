@@ -80,6 +80,8 @@ describe('soroban-budget-action', () => {
         },
         sha: 'headsha',
         ref: 'refs/pull/123/merge',
+        serverUrl: 'https://github.com',
+        runId: 987,
       },
       writable: true,
     });
@@ -161,7 +163,7 @@ describe('soroban-budget-action', () => {
     }));
   });
 
-  it('fails without a regression comment when core cannot compare', async () => {
+  it('fails with a failed-run comment, not a regression, when core cannot compare', async () => {
     mockGetInput.mockReturnValue('default');
 
     // Core exits 2 on usage and runtime errors, with the reason on stderr and nothing on stdout.
@@ -178,7 +180,16 @@ describe('soroban-budget-action', () => {
     expect(mockSetFailed).toHaveBeenCalledWith(
       'soroban-budget-core failed with exit code 2: Error opening baseline: open default: no such file or directory'
     );
-    expect(mockCreateComment).not.toHaveBeenCalled();
+    expect(mockCreateComment).toHaveBeenCalledWith(expect.objectContaining({
+      issue_number: 123,
+      body: expect.stringContaining('**The latest run failed:** soroban-budget-core exited with code 2'),
+    }));
+    const body: string = mockCreateComment.mock.calls[0][0].body;
+    expect(body.startsWith(COMMENT_MARKER)).toBe(true);
+    expect(body).toContain('[workflow run](https://github.com/test-owner/test-repo/actions/runs/987)');
+    expect(body).not.toContain('Regression');
+    // Core's stderr stays in the run log; it can include the RPC URL.
+    expect(body).not.toContain('Error opening baseline');
   });
 
   it('treats any other exit code as a failure, not a regression', async () => {
@@ -189,7 +200,9 @@ describe('soroban-budget-action', () => {
 
     expect(mockSetOutput).toHaveBeenCalledWith('regression_detected', 'false');
     expect(mockSetFailed).toHaveBeenCalledWith('soroban-budget-core failed with exit code 127: no error output');
-    expect(mockCreateComment).not.toHaveBeenCalled();
+    expect(mockCreateComment).toHaveBeenCalledWith(expect.objectContaining({
+      body: expect.stringContaining('exited with code 127'),
+    }));
   });
 
   it('creates the report comment with the hidden marker when the PR has none', async () => {
@@ -236,17 +249,52 @@ old report` },
     expect(mockCreateComment).not.toHaveBeenCalled();
   });
 
-  it('does not comment when core fails, even if a report comment exists', async () => {
+  it('replaces an earlier report with the failed-run note when core fails', async () => {
     mockGetInput.mockReturnValue('default');
     mockPaginate.mockResolvedValue([{ id: 42, body: `${COMMENT_MARKER}
+![BudgetGate Status](https://img.shields.io/badge/BudgetGate-Passing-success)
 old report` }]);
     mockExec.mockResolvedValue(2);
 
     await run();
 
-    expect(mockPaginate).not.toHaveBeenCalled();
-    expect(mockUpdateComment).not.toHaveBeenCalled();
+    expect(mockUpdateComment).toHaveBeenCalledWith({
+      owner: 'test-owner',
+      repo: 'test-repo',
+      comment_id: 42,
+      body: expect.stringContaining('**The latest run failed:**'),
+    });
+    const body: string = mockUpdateComment.mock.calls[0][0].body;
+    expect(body).not.toContain('old report');
+    expect(body).not.toContain('Passing');
     expect(mockCreateComment).not.toHaveBeenCalled();
+  });
+
+  it('still fails with core\'s error when the failed-run comment cannot be posted', async () => {
+    mockGetInput.mockReturnValue('default');
+    mockPaginate.mockRejectedValue(new Error('Resource not accessible by integration'));
+    mockExec.mockResolvedValue(2);
+
+    await run();
+
+    expect(mockSetFailed).toHaveBeenCalledTimes(1);
+    expect(mockSetFailed).toHaveBeenCalledWith('soroban-budget-core failed with exit code 2: no error output');
+    expect(core.warning).toHaveBeenCalledWith(expect.stringContaining('Could not update the PR comment'));
+  });
+
+  it('does not comment after a core failure outside a pull request', async () => {
+    mockGetInput.mockReturnValue('default');
+    Object.defineProperty(github, 'context', {
+      value: { payload: {}, repo: { owner: 'test-owner', repo: 'test-repo' }, serverUrl: 'https://github.com', runId: 987 },
+      writable: true,
+    });
+    mockExec.mockResolvedValue(2);
+
+    await run();
+
+    expect(mockPaginate).not.toHaveBeenCalled();
+    expect(mockCreateComment).not.toHaveBeenCalled();
+    expect(mockSetFailed).toHaveBeenCalledWith('soroban-budget-core failed with exit code 2: no error output');
   });
 
   it('skips comment creation when not in a PR context', async () => {
