@@ -37,6 +37,9 @@ bower_components
 # Compiled binary addons (https://nodejs.org/api/addons.html)
 build/Release
 
+# tsc output (tsconfig outDir). The Action ships the ncc bundle in dist/, not this.
+/lib/
+
 # Dependency directories
 node_modules/
 jspm_packages/

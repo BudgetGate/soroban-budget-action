@@ -26,7 +26,7 @@ State of `main` (`c03f4c2`) on 2026-10-26. `package.json` name `soroban-budget-a
 | `action.yml` | `runs.using: node20`. Inputs: `github-token` (required, default `${{ github.token }}`), `baseline-path` (default `baseline.json`), `new-path`, `fixture-path`, `rpc-url`, `binary-path`, `binary-version`. Output: `regression_detected`. |
 | Tests | `__tests__/index.test.ts`, Jest 30 + `ts-jest`, 21 tests (comment create vs update; baseline from file, cache hit, cache miss, cache failure; save on default-branch push after exit 0 and 1, not after an error or on other branches). Each test runs in its own temp directory. Mocks `@actions/cache`, `@actions/core`, `@actions/github`, `@actions/exec`, `@actions/tool-cache`. Exit codes 0, 1, 2 and 127 each have a test; report text alone never counts as a regression. |
 | `dist/` | Committed on purpose. Matched a fresh `ncc` build of `src/` on 2026-10-26. |
-| `lib/index.js` | Committed (August), referenced by nothing (A6). |
+| `lib/` | `tsc` output (`tsconfig.json` `outDir`); not used by the build (`ncc`) or tests (`ts-jest`), and gitignored. |
 | `examples/` | `rust-project.yml`, `monorepo.yml`. Both use `@v1` and `fixture-path`, and set neither `binary-path` nor `binary-version`. |
 | `.github/workflows/ci.yml` | `Action CI`, job `build-and-test`: Node 20, `npm ci`, `npm run build`, then fails if the build changed `dist/` (`git diff --quiet -- dist`), then `npm test`. Runs on push/PR to `main` only. `dist/` is in `.gitignore` with only `dist/index.js` force-tracked, so the check covers that file, not new output files. |
 | Other | `website/` (unexplained Vite app; its README is the unedited Vite template), `DOCUMENTATION.md`, `PR_BODY.md`, `pr_body_action.md` (A12), `CONTRIBUTING.md` (generic; says Go 1.21+, copied from core), `SECURITY.md` (reporting address `security@budgetgate.io`, not checked to be deliverable; states the project is unaudited). |
@@ -42,7 +42,6 @@ Checked 2026-10-26 against `origin/main` (`c03f4c2`).
 | A1 | README example still has the user hand-generate `baseline.json`/`new.json` (`new-path`), and its inputs table omits `fixture-path`, `rpc-url` and `binary-version`. The code itself does support `fixture-path`. | `README.md`, `action.yml` |
 | A2 | No usable core binary. `binary-version` downloads from a core release that does not exist (core C12); without it, `binary-path` defaults to `./budget-core`, which a user's repo does not have. The examples set neither, so they cannot run. | `src/index.ts`, `examples/*.yml` |
 | A3 | README and `examples/*.yml` use `@v1`. Only tag is `v0.1.0`; no releases. | GitHub API |
-| A6 | `lib/index.js` committed and unused (`action.yml` runs `dist/index.js`). | `git ls-tree`, grep |
 | A7 | README example pins `actions/checkout@v3` (examples use `@v4`). `github-token` is `required: true` but has a default. | `README.md`, `action.yml` |
 | A14 | After a core error, the PR keeps the previous run's report comment (e.g. "Passing"), so the comment can show a stale result while the latest check failed. The failed step is visible in the checks list, not in the comment. Open question: update the existing comment with "latest run failed: …", or leave it. | `src/index.ts` (no comment on exit ≠ 0/1); local run against a fake GitHub API 2026-10-27 |
 | A11 | Unverified: `runs.using: node20` may be deprecated on GitHub-hosted runners. Check GitHub's current Node runtime support before the first release. | `action.yml` |
@@ -53,7 +52,7 @@ Checked 2026-10-26 against `origin/main` (`c03f4c2`).
 
 Core's real measurement has landed (core #9, #8; verified on testnet), so the Action can be run against real numbers today by building core from source and passing `binary-path` (the docs site's setup page does this). Core exits 0 pass / 1 regression / 2 error (core #15), and the Action uses that (A8 fixed). Still blocked on core: a release binary (core C12) for A2/A3.
 
-1. Not blocked: A6, A7, A12, A15 (unused `lib/`, README accuracy, stale repo docs, `package.json` `main`/`author`).
+1. Not blocked: A7, A12, A15 (README accuracy, stale repo docs, `package.json` `main`/`author`).
 2. A14: decide with the maintainer how the comment shows a failed run.
 3. A1, A2, A3: README and examples that actually run, then a release when asked.
 

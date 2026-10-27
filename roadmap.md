@@ -15,7 +15,8 @@ Last updated: 2026-10-26
 - Open question (A14): after a core error the previous report comment stays; should it be updated to say the run failed?
 - A5 done: the baseline comes from `baseline-path` if the file exists, else the Actions cache (saved on every default-branch push), else an empty baseline with a visible note. Found and fixed on the way: `@actions/cache` 6.2.0 is ESM-only, so the bundle never contained it and saving had never worked; pinned `^5.3.0` (CommonJS).
 - A4 done: `package.json` and the lockfile root say `MIT`, matching `LICENSE`; `description` filled in.
-- Next up: phase 1 leftovers (A6 unused `lib/`, A15 `package.json` `main`/`author`, A7 README checkout/token, A12 stale repo docs, A11 Node runtime). A14 waits for the maintainer.
+- A6 done: the stale `tsc` output `lib/index.js` (2026-09-15) is removed and `lib/` is gitignored.
+- Next up: phase 1 leftovers (A15 `package.json` `main`/`author`, A7 README checkout/token, A12 stale repo docs, A11 Node runtime). A14 waits for the maintainer.
 - Not verified anywhere yet: a real cache round trip (save on a default-branch push, restore on a PR). That needs a workflow in a real repository.
 
 ## Blocked on core
@@ -31,7 +32,7 @@ The Action can't be finished end to end until core has:
 - [x] A10: CI step that rebuilds `dist/` and fails if it differs from the committed copy
 - [x] A4: `package.json` license `MIT` and a real description
 - [ ] A15: `package.json` `main` points at a real file (or is removed); `author` set
-- [ ] A6: remove the unused `lib/index.js`
+- [x] A6: remove the unused `lib/index.js` (stale `tsc` output) and gitignore `lib/`
 - [ ] A7: README example uses `actions/checkout@v4`; resolve `github-token` being both required and defaulted
 - [ ] A12: replace `DOCUMENTATION.md` with a link to the docs site (or make it accurate); remove `PR_BODY.md` and `pr_body_action.md`
 - [ ] A11: check whether `runs.using: node20` is still supported; move to the current runtime if not
