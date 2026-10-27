@@ -3,7 +3,7 @@ import * as github from '@actions/github';
 import * as exec from '@actions/exec';
 import * as tc from '@actions/tool-cache';
 import * as path from 'path';
-import { run } from '../src/index';
+import { run, COMMENT_MARKER } from '../src/index';
 
 jest.mock('@actions/core');
 jest.mock('@actions/github');
@@ -16,6 +16,9 @@ describe('soroban-budget-action', () => {
   let mockSetOutput: jest.Mock;
   let mockExec: jest.Mock;
   let mockCreateComment: jest.Mock;
+  let mockUpdateComment: jest.Mock;
+  let mockListComments: jest.Mock;
+  let mockPaginate: jest.Mock;
   let mockDownloadTool: jest.Mock;
   let mockCacheFile: jest.Mock;
 
@@ -31,10 +34,17 @@ describe('soroban-budget-action', () => {
     mockCacheFile = tc.cacheFile as jest.Mock;
     
     mockCreateComment = jest.fn();
+    mockUpdateComment = jest.fn();
+    mockListComments = jest.fn();
+    // No earlier comments unless a test says otherwise.
+    mockPaginate = jest.fn().mockResolvedValue([]);
     (github.getOctokit as jest.Mock).mockReturnValue({
+      paginate: mockPaginate,
       rest: {
         issues: {
           createComment: mockCreateComment,
+          updateComment: mockUpdateComment,
+          listComments: mockListComments,
         },
       },
     });
@@ -154,6 +164,63 @@ describe('soroban-budget-action', () => {
 
     expect(mockSetOutput).toHaveBeenCalledWith('regression_detected', 'false');
     expect(mockSetFailed).toHaveBeenCalledWith('soroban-budget-core failed with exit code 127: no error output');
+    expect(mockCreateComment).not.toHaveBeenCalled();
+  });
+
+  it('creates the report comment with the hidden marker when the PR has none', async () => {
+    mockGetInput.mockReturnValue('default');
+    mockPaginate.mockResolvedValue([{ id: 7, body: 'Looks good to me' }]);
+    mockExec.mockResolvedValue(0);
+
+    await run();
+
+    expect(mockPaginate).toHaveBeenCalledWith(mockListComments, {
+      owner: 'test-owner', repo: 'test-repo', issue_number: 123, per_page: 100,
+    });
+    expect(mockCreateComment).toHaveBeenCalledWith(expect.objectContaining({
+      issue_number: 123,
+      body: expect.stringMatching(new RegExp('^' + COMMENT_MARKER)),
+    }));
+    expect(mockUpdateComment).not.toHaveBeenCalled();
+  });
+
+  it('updates the existing report comment instead of posting a new one', async () => {
+    mockGetInput.mockReturnValue('default');
+    mockPaginate.mockResolvedValue([
+      { id: 7, body: 'Looks good to me' },
+      { id: 42, body: `${COMMENT_MARKER}
+### 📊 Soroban Resource Budget Report
+
+old report` },
+    ]);
+    mockExec.mockImplementation(async (cmd, args, options) => {
+      if (options && options.listeners && options.listeners.stdout) {
+        options.listeners.stdout(Buffer.from('new report'));
+      }
+      return 0;
+    });
+
+    await run();
+
+    expect(mockUpdateComment).toHaveBeenCalledWith({
+      owner: 'test-owner',
+      repo: 'test-repo',
+      comment_id: 42,
+      body: expect.stringContaining('new report'),
+    });
+    expect(mockCreateComment).not.toHaveBeenCalled();
+  });
+
+  it('does not comment when core fails, even if a report comment exists', async () => {
+    mockGetInput.mockReturnValue('default');
+    mockPaginate.mockResolvedValue([{ id: 42, body: `${COMMENT_MARKER}
+old report` }]);
+    mockExec.mockResolvedValue(2);
+
+    await run();
+
+    expect(mockPaginate).not.toHaveBeenCalled();
+    expect(mockUpdateComment).not.toHaveBeenCalled();
     expect(mockCreateComment).not.toHaveBeenCalled();
   });
 
