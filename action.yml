@@ -5,7 +5,7 @@ author: 'BudgetGate'
 inputs:
   github-token:
     description: 'GitHub token for posting PR comments'
-    required: true
+    required: false
     default: ${{ github.token }}
   baseline-path:
     description: 'Path to the baseline snapshot JSON'

@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       
       # (Optional) Generate your baseline.json and new.json here using Soroban CLI
 
@@ -42,7 +42,7 @@ jobs:
 
 | Input | Description | Required | Default |
 |-------|-------------|----------|---------|
-| `github-token` | The GitHub token used to authenticate and post PR comments. | **Yes** | `${{ github.token }}` |
+| `github-token` | The GitHub token used to authenticate and post PR comments. | No | `${{ github.token }}` |
 | `baseline-path` | The file path to the baseline snapshot JSON. | No | `baseline.json` |
 | `new-path` | The file path to the new/current snapshot JSON. | No | `new.json` |
 | `binary-path` | The path to the `budget-core` binary to execute. | No | `./budget-core` |
