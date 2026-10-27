@@ -22,11 +22,20 @@ jobs:
 
     # action.yml runs the committed dist/index.js, so it must be the build of the committed src/.
     - name: Check dist/ is up to date
+      id: dist
       run: |
         if ! git diff --quiet -- dist; then
-          echo "::error::dist/ does not match a fresh build of src/. Run 'npm run build' and commit dist/."
+          echo "::error::dist/ does not match a fresh build of src/. Run 'npm run build' and commit dist/, or download the 'dist' artifact of this run and commit it."
           git diff --stat -- dist
           exit 1
         fi
+
+    # A build on Windows can differ from this Linux build, so offer the exact file CI expects.
+    - name: Upload the fresh build of dist/
+      if: failure() && steps.dist.outcome == 'failure'
+      uses: actions/upload-artifact@v4
+      with:
+        name: dist
+        path: dist/index.js
 
     - run: npm test
