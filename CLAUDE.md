@@ -42,16 +42,15 @@ Checked 2026-10-26 against `origin/main` (`c03f4c2`).
 | A1 | README example still has the user hand-generate `baseline.json`/`new.json` (`new-path`), and its inputs table omits `fixture-path`, `rpc-url` and `binary-version`. The code itself does support `fixture-path`. | `README.md`, `action.yml` |
 | A2 | No usable core binary. `binary-version` downloads from a core release that does not exist (core C12); without it, `binary-path` defaults to `./budget-core`, which a user's repo does not have. The examples set neither, so they cannot run. | `src/index.ts`, `examples/*.yml` |
 | A3 | README and `examples/*.yml` use `@v1`. Only tag is `v0.1.0`; no releases. | GitHub API |
-| A16 | Every `actions/checkout` pin is behind the current major (v7.0.0, 2026-06-18; checked 2026-10-27): README and `examples/*.yml` use `@v4`, as does the docs site's `action/setup.md`. | GitHub API `actions/checkout` releases; `README.md`, `examples/*.yml` |
 | A14 | After a core error, the PR keeps the previous run's report comment (e.g. "Passing"), so the comment can show a stale result while the latest check failed. The failed step is visible in the checks list, not in the comment. Open question: update the existing comment with "latest run failed: …", or leave it. | `src/index.ts` (no comment on exit ≠ 0/1); local run against a fake GitHub API 2026-10-27 |
-| A11 | Unverified: `runs.using: node20` may be deprecated on GitHub-hosted runners. Check GitHub's current Node runtime support before the first release. | `action.yml` |
+| A11 | Unverified: `runs.using: node20` may be deprecated on GitHub-hosted runners. Check GitHub's current Node runtime support before the first release. | `action.yml`; `actions/checkout` v7 itself declares `runs.using: node24` (checked 2026-10-27) |
 | A12 | `DOCUMENTATION.md` describes behaviour that does not exist: `SOROBAN_BUDGET_DEBUG` / `SOROBAN_RPC_TIMEOUT` env vars, 3 RPC retries, "missing baseline exits 0", updating the existing comment, falling back to the console when commenting fails, a summary/advice comment layout, memory in the diff. It duplicates the docs site. `PR_BODY.md` and `pr_body_action.md` are stale PR descriptions; `pr_body_action.md` claims PRs "consume the previously cached baseline", which nothing does (A5). | `DOCUMENTATION.md`, `pr_body_action.md`, `src/index.ts` |
 
 ## 4. Work order for this repo
 
 Core's real measurement has landed (core #9, #8; verified on testnet), so the Action can be run against real numbers today by building core from source and passing `binary-path` (the docs site's setup page does this). Core exits 0 pass / 1 regression / 2 error (core #15), and the Action uses that (A8 fixed). Still blocked on core: a release binary (core C12) for A2/A3.
 
-1. Not blocked: A12, A16 (stale repo docs, `actions/checkout` pins; A16 needs a matching `BudgetGate/docs` PR).
+1. Not blocked: A12 (stale repo docs).
 2. A14: decide with the maintainer how the comment shows a failed run.
 3. A1, A2, A3: README and examples that actually run, then a release when asked.
 
