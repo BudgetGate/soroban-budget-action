@@ -22,15 +22,15 @@ State of `main` (`c03f4c2`) on 2026-10-26. `package.json` name `soroban-budget-a
 | Item | Detail (read in full unless stated) |
 |------|--------|
 | Entry | `src/index.ts`, built with `npm run build` to `dist/index.js` (`ncc build src/index.ts -o dist --license licenses.txt`). `tsconfig.json` has `"strict": true`. |
-| `src/index.ts` | Reads inputs; if `binary-version` is set and `binary-path` is not, downloads `budget-core-linux-amd64` from core release `v<version>` with `@actions/tool-cache`, otherwise uses `binary-path` or `./budget-core`. Runs core with `--fixture` (+ `--rpc-url`, `--output-json new.json`) or `--new`. Decides from core's exit code only: 0 pass, 1 regression (fails the step), anything else is an error (fails the step with core's stderr, `regression_detected=false`, no PR comment, no cache save). Keeps one report comment per PR: lists the PR's comments (`octokit.paginate`, 100 per page), updates the one containing `COMMENT_MARKER` (`<!-- budgetgate-report -->`, first line of the body), or creates it. On a core error it does not touch the comment. On `main`/`master` outside a PR, saves `new.json` with `@actions/cache` (key `budgetgate-baseline-<sha>`, loaded with `require`). |
+| `src/index.ts` | Reads inputs; if `binary-version` is set and `binary-path` is not, downloads `budget-core-linux-amd64` from core release `v<version>` with `@actions/tool-cache`, otherwise uses `binary-path` or `./budget-core`. Runs core with `--fixture` (+ `--rpc-url`, `--output-json new.json`) or `--new`. Decides from core's exit code only: 0 pass, 1 regression (fails the step), anything else is an error (fails the step with core's stderr, `regression_detected=false`, no PR comment, no cache save). Keeps one report comment per PR: lists the PR's comments (`octokit.paginate`, 100 per page), updates the one containing `COMMENT_MARKER` (`<!-- budgetgate-report -->`, first line of the body), or creates it. On a core error it does not touch the comment. Baseline (`resolveBaseline`): a file at `baseline-path` if it exists; else `cache.restoreCache([BASELINE_CACHE_PATH], 'budgetgate-baseline-<PR base sha or push before-sha>', ['budgetgate-baseline-'])` into `.budgetgate/baseline.json`; else an empty schema-2.0 baseline there, with a warning and a "No baseline found" note at the top of the PR comment. On a push to the default branch (`payload.repository.default_branch`, else `main`/`master`), after exit 0 or 1, copies the compared snapshot (`new.json`, or `new-path`) to `.budgetgate/baseline.json` and saves it with key `budgetgate-baseline-<sha>`. Cache errors are warnings, never failures. |
 | `action.yml` | `runs.using: node20`. Inputs: `github-token` (required, default `${{ github.token }}`), `baseline-path` (default `baseline.json`), `new-path`, `fixture-path`, `rpc-url`, `binary-path`, `binary-version`. Output: `regression_detected`. |
-| Tests | `__tests__/index.test.ts`, Jest 30 + `ts-jest`, 11 tests (including create vs update of the marked comment). Mocks `@actions/core`, `@actions/github`, `@actions/exec`, `@actions/tool-cache`. Exit codes 0, 1, 2 and 127 each have a test; report text alone never counts as a regression. |
+| Tests | `__tests__/index.test.ts`, Jest 30 + `ts-jest`, 21 tests (comment create vs update; baseline from file, cache hit, cache miss, cache failure; save on default-branch push after exit 0 and 1, not after an error or on other branches). Each test runs in its own temp directory. Mocks `@actions/cache`, `@actions/core`, `@actions/github`, `@actions/exec`, `@actions/tool-cache`. Exit codes 0, 1, 2 and 127 each have a test; report text alone never counts as a regression. |
 | `dist/` | Committed on purpose. Matched a fresh `ncc` build of `src/` on 2026-10-26. |
 | `lib/index.js` | Committed (August), referenced by nothing (A6). |
 | `examples/` | `rust-project.yml`, `monorepo.yml`. Both use `@v1` and `fixture-path`, and set neither `binary-path` nor `binary-version`. |
 | `.github/workflows/ci.yml` | `Action CI`, job `build-and-test`: Node 20, `npm ci`, `npm run build`, then fails if the build changed `dist/` (`git diff --quiet -- dist`), then `npm test`. Runs on push/PR to `main` only. `dist/` is in `.gitignore` with only `dist/index.js` force-tracked, so the check covers that file, not new output files. |
 | Other | `website/` (unexplained Vite app; its README is the unedited Vite template), `DOCUMENTATION.md`, `PR_BODY.md`, `pr_body_action.md` (A12), `CONTRIBUTING.md` (generic; says Go 1.21+, copied from core), `SECURITY.md` (reporting address `security@budgetgate.io`, not checked to be deliverable; states the project is unaudited). |
-| Dependencies | `@actions/cache ^6.2.0`, `@actions/core ^1.10.1`, `@actions/exec ^1.1.1`, `@actions/github ^5.1.1`, `@actions/tool-cache ^2.0.1` |
+| Dependencies | `@actions/cache ^5.3.0` (keep below 6: 6.x is ESM-only, cannot be `require`d from this CommonJS build, and ncc then bundles a "Cannot find module" stub; 6.2.0 did exactly that until A5), `@actions/core ^1.10.1`, `@actions/exec ^1.1.1`, `@actions/github ^5.1.1`, `@actions/tool-cache ^2.0.1` |
 | Dev dependencies | `@vercel/ncc ^0.44.1`, `jest ^30.4.2`, `ts-jest ^29.4.12`, `typescript ^5.5.4`, `esbuild`, `@types/jest`, `@types/node ^26.1.2` |
 
 ## 3. Known defects
@@ -43,7 +43,6 @@ Checked 2026-10-26 against `origin/main` (`c03f4c2`).
 | A2 | No usable core binary. `binary-version` downloads from a core release that does not exist (core C12); without it, `binary-path` defaults to `./budget-core`, which a user's repo does not have. The examples set neither, so they cannot run. | `src/index.ts`, `examples/*.yml` |
 | A3 | README and `examples/*.yml` use `@v1`. Only tag is `v0.1.0`; no releases. | GitHub API |
 | A4 | `package.json` license `ISC` (repo LICENSE is MIT), empty description. | `package.json` |
-| A5 | Baseline persistence half-built: `new.json` is saved to the Actions cache on `main`, but nothing restores it, so PRs still need `baseline.json` on disk. `@actions/cache` is loaded with an untyped `require`. Decision recorded in the workspace `roadmap.md` (Actions cache), never implemented end to end. | `src/index.ts`, no `restoreCache` |
 | A6 | `lib/index.js` committed and unused (`action.yml` runs `dist/index.js`). | `git ls-tree`, grep |
 | A7 | README example pins `actions/checkout@v3` (examples use `@v4`). `github-token` is `required: true` but has a default. | `README.md`, `action.yml` |
 | A14 | After a core error, the PR keeps the previous run's report comment (e.g. "Passing"), so the comment can show a stale result while the latest check failed. The failed step is visible in the checks list, not in the comment. Open question: update the existing comment with "latest run failed: …", or leave it. | `src/index.ts` (no comment on exit ≠ 0/1); local run against a fake GitHub API 2026-10-27 |
@@ -55,9 +54,8 @@ Checked 2026-10-26 against `origin/main` (`c03f4c2`).
 Core's real measurement has landed (core #9, #8; verified on testnet), so the Action can be run against real numbers today by building core from source and passing `binary-path` (the docs site's setup page does this). Core exits 0 pass / 1 regression / 2 error (core #15), and the Action uses that (A8 fixed). Still blocked on core: a release binary (core C12) for A2/A3.
 
 1. Not blocked: A4, A6, A7, A12 (license, unused `lib/`, README accuracy, stale repo docs).
-2. A5: implement baseline restore (Actions cache, as decided) and type the `@actions/cache` import.
-3. A14: decide with the maintainer how the comment shows a failed run.
-4. A1, A2, A3: README and examples that actually run, then a release when asked.
+2. A14: decide with the maintainer how the comment shows a failed run.
+3. A1, A2, A3: README and examples that actually run, then a release when asked.
 
 `roadmap.md` tracks progress against this list.
 
@@ -68,7 +66,7 @@ npm ci
 npm test            # jest
 npm run build       # ncc build, writes dist/
 ```
-After any change under `src/`, run the build and commit the updated `dist/` in the same PR. A stale `dist/` means runners execute old code. Run on 2026-10-27 (Windows) after A9: `npm test` 11 of 11 pass, and `dist/` was rebuilt from `src/` and committed. `dist/` is in `.gitignore`, so a plain `git add dist/index.js` is refused and aborts the whole `git add`; stage it with `git add -f dist/index.js`. Tests that check paths build the expected value with `path.join`, so they pass on any OS.
+After any change under `src/`, run the build and commit the updated `dist/` in the same PR. A stale `dist/` means runners execute old code. Run on 2026-10-27 (Windows) after A5: `npm test` 21 of 21 pass (tests mock `@actions/cache` and run in a temp directory each), and `dist/` was rebuilt from `src/` and committed. `dist/` is in `.gitignore`, so a plain `git add dist/index.js` is refused and aborts the whole `git add`; stage it with `git add -f dist/index.js`. Tests that check paths build the expected value with `path.join`, so they pass on any OS.
 
 ## 6. Rules
 

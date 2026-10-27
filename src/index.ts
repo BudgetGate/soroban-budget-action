@@ -1,11 +1,80 @@
+import * as cache from '@actions/cache';
 import * as core from '@actions/core';
 import * as github from '@actions/github';
 import * as exec from '@actions/exec';
 import * as tc from '@actions/tool-cache';
+import * as fs from 'fs';
 import * as path from 'path';
 
 // Hidden marker that identifies the Budget Gate report comment on a PR.
 export const COMMENT_MARKER = '<!-- budgetgate-report -->';
+
+// The Actions cache matches entries by their file paths as well as their key, so the baseline is
+// always saved and restored at this one path.
+export const BASELINE_CACHE_PATH = path.join('.budgetgate', 'baseline.json');
+export const BASELINE_CACHE_PREFIX = 'budgetgate-baseline-';
+
+// A baseline with no functions: core then reports every function as new.
+const EMPTY_BASELINE = '{"schema_version":"2.0","functions":[]}\n';
+
+interface Baseline {
+  path: string;
+  // Shown at the top of the PR comment when the baseline is not a real one.
+  note?: string;
+}
+
+// resolveBaseline picks the baseline to compare against: a file at baseline-path if it exists,
+// else the snapshot cached from the base branch, else an empty baseline with a visible note.
+async function resolveBaseline(baselinePath: string): Promise<Baseline> {
+  if (fs.existsSync(baselinePath)) {
+    core.info(`Using baseline file ${baselinePath}.`);
+    return { path: baselinePath };
+  }
+
+  const pr = github.context.payload.pull_request;
+  const baseSha: string = pr?.base?.sha ?? github.context.payload.before ?? '';
+  try {
+    const key = await cache.restoreCache([BASELINE_CACHE_PATH], `${BASELINE_CACHE_PREFIX}${baseSha}`, [BASELINE_CACHE_PREFIX]);
+    if (key) {
+      core.info(`Restored baseline from cache entry ${key}.`);
+      return { path: BASELINE_CACHE_PATH };
+    }
+    core.warning(`No baseline file at ${baselinePath} and no cached baseline. Every function will show as new.`);
+  } catch (e) {
+    core.warning(`Could not restore the cached baseline: ${e}. Every function will show as new.`);
+  }
+
+  fs.mkdirSync(path.dirname(BASELINE_CACHE_PATH), { recursive: true });
+  fs.writeFileSync(BASELINE_CACHE_PATH, EMPTY_BASELINE);
+  return {
+    path: BASELINE_CACHE_PATH,
+    note: `> **No baseline found** (no \`${baselinePath}\` and nothing cached from the base branch), so every function is shown as 🆕 NEW. A baseline is saved when this workflow runs on the default branch.`,
+  };
+}
+
+// saveBaseline caches the snapshot that was just compared as the baseline for this commit.
+async function saveBaseline(snapshotPath: string): Promise<void> {
+  try {
+    if (path.resolve(snapshotPath) !== path.resolve(BASELINE_CACHE_PATH)) {
+      fs.mkdirSync(path.dirname(BASELINE_CACHE_PATH), { recursive: true });
+      fs.copyFileSync(snapshotPath, BASELINE_CACHE_PATH);
+    }
+    const key = `${BASELINE_CACHE_PREFIX}${github.context.sha}`;
+    const cacheId = await cache.saveCache([BASELINE_CACHE_PATH], key);
+    core.info(`Saved baseline to cache entry ${key} (id ${cacheId}).`);
+  } catch (e) {
+    core.warning(`Failed to save baseline cache: ${e}`);
+  }
+}
+
+// isDefaultBranchPush is true for a push to the repository's default branch.
+function isDefaultBranchPush(): boolean {
+  const defaultBranch: string | undefined = github.context.payload.repository?.default_branch;
+  if (defaultBranch) {
+    return github.context.ref === `refs/heads/${defaultBranch}`;
+  }
+  return github.context.ref === 'refs/heads/main' || github.context.ref === 'refs/heads/master';
+}
 
 export async function run(): Promise<void> {
   try {
@@ -16,25 +85,26 @@ export async function run(): Promise<void> {
     const rpcUrl = core.getInput('rpc-url');
     let binaryPath = core.getInput('binary-path');
     const binaryVersion = core.getInput('binary-version');
-    
+
     // Download binary if version is specified
     if (binaryVersion && !binaryPath) {
       core.info(`Downloading soroban-budget-core v${binaryVersion}...`);
       const url = `https://github.com/BudgetGate/soroban-budget-core/releases/download/v${binaryVersion}/budget-core-linux-amd64`;
       const downloadPath = await tc.downloadTool(url);
-      
+
       // Cache the tool
       const cachedPath = await tc.cacheFile(downloadPath, 'budget-core', 'soroban-budget-core', binaryVersion);
       binaryPath = path.join(cachedPath, 'budget-core');
-      
+
       // Make it executable
       await exec.exec('chmod', ['+x', binaryPath]);
     } else if (!binaryPath) {
       binaryPath = './budget-core';
     }
-    
-    core.info(`Running Soroban Budget Guard Core against ${baselinePath}`);
-    
+
+    const baseline = await resolveBaseline(baselinePath);
+    core.info(`Running Soroban Budget Guard Core against ${baseline.path}`);
+
     let output = '';
     let errorOutput = '';
 
@@ -47,21 +117,22 @@ export async function run(): Promise<void> {
         errorOutput += data.toString();
       }
     };
-    
+
     options.ignoreReturnCode = true;
 
-    const args = ['--baseline', baselinePath];
+    // The snapshot core compares against the baseline; it becomes the next baseline on the default branch.
+    let snapshotPath: string;
+    const args = ['--baseline', baseline.path];
     if (fixturePath) {
       args.push('--fixture', fixturePath);
       if (rpcUrl) {
         args.push('--rpc-url', rpcUrl);
       }
-      // Ensure we output the new snapshot to a file so it can be cached
-      args.push('--output-json', 'new.json');
-    } else if (newPath) {
-      args.push('--new', newPath);
+      snapshotPath = 'new.json';
+      args.push('--output-json', snapshotPath);
     } else {
-      args.push('--new', 'new.json');
+      snapshotPath = newPath || 'new.json';
+      args.push('--new', snapshotPath);
     }
 
     const exitCode = await exec.exec(binaryPath, args, options);
@@ -84,12 +155,13 @@ export async function run(): Promise<void> {
     // Post the markdown table to the PR
     if (github.context.payload.pull_request) {
       const octokit = github.getOctokit(token);
-      
-      const badgeUrl = hasRegression 
+
+      const badgeUrl = hasRegression
         ? 'https://img.shields.io/badge/BudgetGate-Regression%20Detected-red'
         : 'https://img.shields.io/badge/BudgetGate-Passing-success';
-        
-      const commentBody = `${COMMENT_MARKER}\n### 📊 Soroban Resource Budget Report\n\n![BudgetGate Status](${badgeUrl})\n\n${output}\n\n*Generated by BudgetGate*`;
+
+      const note = baseline.note ? `${baseline.note}\n\n` : '';
+      const commentBody = `${COMMENT_MARKER}\n### 📊 Soroban Resource Budget Report\n\n![BudgetGate Status](${badgeUrl})\n\n${note}${output}\n\n*Generated by BudgetGate*`;
 
       // Keep one report per PR: update the comment that carries the marker, or create it.
       const issue = {
@@ -108,20 +180,9 @@ export async function run(): Promise<void> {
       }
     } else {
       core.info('Not running in a Pull Request context. Skipping comment generation.');
-      // When merging to main, we might want to cache the new.json as baseline.json
-      if (github.context.ref === 'refs/heads/main' || github.context.ref === 'refs/heads/master') {
-        core.info('On main branch. Caching new.json as baseline for future PRs.');
-        try {
-          // Import here to avoid failing if not installed globally
-          const cache = require('@actions/cache');
-          // Cache the new.json as the baseline for this commit
-          const cacheId = await cache.saveCache(['new.json'], `budgetgate-baseline-${github.context.sha}`);
-          core.info(`Saved baseline cache with ID: ${cacheId}`);
-        } catch (e) {
-          core.warning(`Failed to save baseline cache: ${e}`);
-        }
-      } else {
-        core.info('Tip: In the main branch workflow, use actions/cache to persist new.json as the baseline for future PRs.');
+      // Merged code is the new reference, so the snapshot is saved even after a regression.
+      if (isDefaultBranchPush()) {
+        await saveBaseline(snapshotPath);
       }
     }
 
