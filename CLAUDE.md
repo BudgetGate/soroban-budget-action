@@ -29,7 +29,7 @@ State of `main` (`c03f4c2`) on 2026-10-26. `package.json` name `soroban-budget-a
 | `lib/` | `tsc` output (`tsconfig.json` `outDir`); not used by the build (`ncc`) or tests (`ts-jest`), and gitignored. |
 | `examples/` | `rust-project.yml`, `monorepo.yml`. Both use `@v1` and `fixture-path`, and set neither `binary-path` nor `binary-version`. |
 | `.github/workflows/ci.yml` | `Action CI`, job `build-and-test`: Node 20, `npm ci`, `npm run build`, then fails if the build changed `dist/` (`git diff --quiet -- dist`), then `npm test`. Runs on push/PR to `main` only. `dist/` is in `.gitignore` with only `dist/index.js` force-tracked, so the check covers that file, not new output files. |
-| Other | `CONTRIBUTING.md` (written for Go, A18), `SECURITY.md` (reporting address `security@budgetgate.io`, not checked to be deliverable; states the project is unaudited). User docs are on the docs site, linked from the README. |
+| Other | `CONTRIBUTING.md` (local setup, the `dist/` rule, change rules), `SECURITY.md` (reporting address `security@budgetgate.io`, not checked to be deliverable; states the project is unaudited). User docs are on the docs site, linked from the README. |
 | Dependencies | `@actions/cache ^5.3.0` (keep below 6: 6.x is ESM-only, cannot be `require`d from this CommonJS build, and ncc then bundles a "Cannot find module" stub; 6.2.0 did exactly that until A5), `@actions/core ^1.10.1`, `@actions/exec ^1.1.1`, `@actions/github ^5.1.1`, `@actions/tool-cache ^2.0.1` |
 | Dev dependencies | `@vercel/ncc ^0.44.1`, `jest ^30.4.2`, `ts-jest ^29.4.12`, `typescript ^5.5.4`, `esbuild`, `@types/jest`, `@types/node ^26.1.2` |
 
@@ -44,13 +44,12 @@ Checked 2026-10-26 against `origin/main` (`c03f4c2`).
 | A3 | README and `examples/*.yml` use `@v1`. Only tag is `v0.1.0`; no releases. | GitHub API |
 | A14 | After a core error, the PR keeps the previous run's report comment (e.g. "Passing"), so the comment can show a stale result while the latest check failed. The failed step is visible in the checks list, not in the comment. Open question: update the existing comment with "latest run failed: …", or leave it. | `src/index.ts` (no comment on exit ≠ 0/1); local run against a fake GitHub API 2026-10-27 |
 | A11 | Unverified: `runs.using: node20` may be deprecated on GitHub-hosted runners. Check GitHub's current Node runtime support before the first release. | `action.yml`; `actions/checkout` v7 itself declares `runs.using: node24` (checked 2026-10-27) |
-| A18 | `CONTRIBUTING.md` tells contributors to install Go 1.21+, run `go mod download` and `go test ./...`. This repo is TypeScript (`npm ci`, `npm test`, `npm run build`, commit `dist/`). Copied from core. | `CONTRIBUTING.md` lines 7–10 |
 
 ## 4. Work order for this repo
 
 Core's real measurement has landed (core #9, #8; verified on testnet), so the Action can be run against real numbers today by building core from source and passing `binary-path` (the docs site's setup page does this). Core exits 0 pass / 1 regression / 2 error (core #15), and the Action uses that (A8 fixed). Still blocked on core: a release binary (core C12) for A2/A3.
 
-1. Not blocked: A18 (`CONTRIBUTING.md` written for Go).
+1. Not blocked: A11 (check whether `runs.using: node20` is still supported; `actions/checkout` v7 already runs on `node24`).
 2. A14: decide with the maintainer how the comment shows a failed run.
 3. A1, A2, A3: README and examples that actually run, then a release when asked.
 
@@ -63,7 +62,7 @@ npm ci
 npm test            # jest
 npm run build       # ncc build, writes dist/
 ```
-After any change under `src/`, run the build and commit the updated `dist/` in the same PR. A stale `dist/` means runners execute old code. Run on 2026-10-27 (Windows) after A5: `npm test` 21 of 21 pass (tests mock `@actions/cache` and run in a temp directory each), and `dist/` was rebuilt from `src/` and committed. `dist/` is in `.gitignore`, so a plain `git add dist/index.js` is refused and aborts the whole `git add`; stage it with `git add -f dist/index.js`. Since `@actions/cache` 5.x is bundled, an ncc build on Windows orders modules differently from the Linux build CI does (same size, ~14,600 lines differ), so a Windows-built `dist/` fails the dist check. When that happens, CI uploads its own build as the `dist` artifact: `gh run download <run-id> -n dist -D dist` and commit that file. Tests that check paths build the expected value with `path.join`, so they pass on any OS.
+After any change under `src/`, run the build and commit the updated `dist/` in the same PR. A stale `dist/` means runners execute old code. Run on 2026-10-27 (Windows) after A5: `npm test` 21 of 21 pass (tests mock `@actions/cache` and run in a temp directory each), and `dist/` was rebuilt from `src/` and committed. `dist/` is in `.gitignore`, so a plain `git add dist/index.js` warns and exits 1 (git 2.43 on Linux still stages the file; an earlier note from a Windows machine said it aborted the whole `git add`). Stage it with `git add -f dist/index.js`, which exits 0 everywhere. Since `@actions/cache` 5.x is bundled, an ncc build on Windows orders modules differently from the Linux build CI does (same size, ~14,600 lines differ), so a Windows-built `dist/` fails the dist check. When that happens, CI uploads its own build as the `dist` artifact: `gh run download <run-id> -n dist -D dist` and commit that file. Tests that check paths build the expected value with `path.join`, so they pass on any OS.
 
 ## 6. Rules
 

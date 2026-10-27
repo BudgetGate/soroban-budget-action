@@ -6,7 +6,7 @@ Last updated: 2026-10-27
 
 ## Where I left off
 
-- `main` is at `9d76e5c` (after #17). `dist/` is in sync with `src/` (rebuilt with ncc on Linux and diffed 2026-10-27); 21 of 21 tests pass.
+- `main` is at `678252b` (after #18). `dist/` is in sync with `src/` (rebuilt with ncc on Linux and diffed 2026-10-27); 21 of 21 tests pass.
 - A13 done: the tool-cache test builds its expected path with `path.join`; 6 of 6 tests pass on Windows and Linux.
 - Core is feature-complete for its work order (exit code 2 for errors, report-only stdout, live network caps). The docs site's setup page shows the interim workflow: build core from source, pass `binary-path`.
 - A10 done: CI rebuilds `dist/` and fails if it differs from the committed copy.
@@ -21,7 +21,8 @@ Last updated: 2026-10-27
 - A16 done: README and `examples/*.yml` use `actions/checkout@v7` (current major, node24 runtime); the docs site's setup page matches (`BudgetGate/docs` PR).
 - A12 done: `DOCUMENTATION.md` (mostly invented behaviour), `PR_BODY.md` and `pr_body_action.md` removed; the README links to the docs site.
 - A17 done: `website/` removed. It was an undeployed Vite site whose pages repeated `DOCUMENTATION.md`'s invented claims (debug env var, memory, `@v1`); the docs site is the only docs site.
-- Next up: phase 1 leftovers (A18 `CONTRIBUTING.md`, A11 Node runtime). A14 waits for the maintainer.
+- A18 done: `CONTRIBUTING.md` rewritten for this repo (Node 20, `npm ci`/`test`/`build`, committing `dist/` with `git add -f`, CI's `dist` artifact, the Action's rules).
+- Next up: phase 1 leftover A11 (Node runtime). A14 waits for the maintainer.
 - Not verified anywhere yet: a real cache round trip (save on a default-branch push, restore on a PR). That needs a workflow in a real repository.
 
 ## Blocked on core
@@ -42,7 +43,7 @@ The Action can't be finished end to end until core has:
 - [x] A16: move every `actions/checkout` pin (README, examples, docs site) to the current major
 - [x] A12: replace `DOCUMENTATION.md` with a link to the docs site (or make it accurate); remove `PR_BODY.md` and `pr_body_action.md`
 - [x] A17: remove the unused `website/` Vite template
-- [ ] A18: `CONTRIBUTING.md` written for this TypeScript repo (Node, `npm ci`, `npm test`, `npm run build`, committing `dist/`)
+- [x] A18: `CONTRIBUTING.md` written for this TypeScript repo (Node, `npm ci`, `npm test`, `npm run build`, committing `dist/`)
 - [ ] A11: check whether `runs.using: node20` is still supported; move to the current runtime if not
 
 ## Phase 2: Baseline persistence and PR comment
