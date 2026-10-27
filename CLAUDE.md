@@ -66,7 +66,7 @@ npm ci
 npm test            # jest
 npm run build       # ncc build, writes dist/
 ```
-After any change under `src/`, run the build and commit the updated `dist/` in the same PR. A stale `dist/` means runners execute old code. Run on 2026-10-27 (Windows) after A5: `npm test` 21 of 21 pass (tests mock `@actions/cache` and run in a temp directory each), and `dist/` was rebuilt from `src/` and committed. `dist/` is in `.gitignore`, so a plain `git add dist/index.js` is refused and aborts the whole `git add`; stage it with `git add -f dist/index.js`. Tests that check paths build the expected value with `path.join`, so they pass on any OS.
+After any change under `src/`, run the build and commit the updated `dist/` in the same PR. A stale `dist/` means runners execute old code. Run on 2026-10-27 (Windows) after A5: `npm test` 21 of 21 pass (tests mock `@actions/cache` and run in a temp directory each), and `dist/` was rebuilt from `src/` and committed. `dist/` is in `.gitignore`, so a plain `git add dist/index.js` is refused and aborts the whole `git add`; stage it with `git add -f dist/index.js`. Since `@actions/cache` 5.x is bundled, an ncc build on Windows orders modules differently from the Linux build CI does (same size, ~14,600 lines differ), so a Windows-built `dist/` fails the dist check. When that happens, CI uploads its own build as the `dist` artifact: `gh run download <run-id> -n dist -D dist` and commit that file. Tests that check paths build the expected value with `path.join`, so they pass on any OS.
 
 ## 6. Rules
 
