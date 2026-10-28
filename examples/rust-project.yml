@@ -1,10 +1,14 @@
-name: Soroban Budget Guard
+name: Budget Gate
 
 on:
   pull_request:
     branches: [ "main" ]
   push:
     branches: [ "main" ]
+
+permissions:
+  contents: read
+  pull-requests: write
 
 jobs:
   budget-check:
@@ -13,12 +17,10 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v7
 
-      - name: Compile Smart Contracts
-        run: cargo build --target wasm32-unknown-unknown --release
-
-      - name: Run Soroban Budget Guard
-        uses: BudgetGate/soroban-budget-action@v1
+      # The fixture calls your contract as deployed on the network; regenerate it after redeploying.
+      - name: Run Budget Gate
+        uses: BudgetGate/soroban-budget-action@v0.2.0
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
           fixture-path: 'tests/fixture.json'
           rpc-url: 'https://soroban-testnet.stellar.org'
+          binary-version: '0.2.0'

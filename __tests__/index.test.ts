@@ -6,13 +6,16 @@ import * as tc from '@actions/tool-cache';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { run, COMMENT_MARKER, BASELINE_CACHE_PATH, BASELINE_CACHE_PREFIX } from '../src/index';
+import * as crypto from 'crypto';
+import { run, verifyChecksum, COMMENT_MARKER, BASELINE_CACHE_PATH, BASELINE_CACHE_PREFIX, CORE_ASSET } from '../src/index';
 
 jest.mock('@actions/cache');
 jest.mock('@actions/core');
 jest.mock('@actions/github');
 jest.mock('@actions/exec');
 jest.mock('@actions/tool-cache');
+// Only platform and arch are replaced, so tests can pick the runner the Action sees.
+jest.mock('os', () => ({ ...jest.requireActual('os'), platform: jest.fn(), arch: jest.fn() }));
 
 describe('soroban-budget-action', () => {
   let mockGetInput: jest.Mock;
@@ -326,36 +329,88 @@ old report` }]);
 
     expect(mockSetFailed).toHaveBeenCalledWith(errorMsg);
   });
-  it('downloads binary via tool-cache when binary-version is provided', async () => {
-    fs.writeFileSync('base.json', '{"schema_version":"2.0","functions":[]}');
-    mockGetInput.mockImplementation((name: string) => {
-      switch (name) {
-        case 'github-token': return 'fake-token';
-        case 'baseline-path': return 'base.json';
-        case 'fixture-path': return 'fixture.json';
-        case 'rpc-url': return 'https://rpc.example';
-        case 'binary-version': return '1.2.3';
-        default: return '';
-      }
+  describe('binary-version', () => {
+    const RELEASE = 'https://github.com/BudgetGate/soroban-budget-core/releases/download/v1.2.3';
+    const sha256 = (data: string) => crypto.createHash('sha256').update(data).digest('hex');
+
+    beforeEach(() => {
+      fs.writeFileSync('base.json', '{"schema_version":"2.0","functions":[]}');
+      mockGetInput.mockImplementation((name: string) => {
+        switch (name) {
+          case 'github-token': return 'fake-token';
+          case 'baseline-path': return 'base.json';
+          case 'fixture-path': return 'fixture.json';
+          case 'rpc-url': return 'https://rpc.example';
+          case 'binary-version': return '1.2.3';
+          default: return '';
+        }
+      });
+      (os.platform as jest.Mock).mockReturnValue('linux');
+      (os.arch as jest.Mock).mockReturnValue('x64');
+      fs.writeFileSync('downloaded-binary', 'binary bytes');
+      mockCacheFile.mockResolvedValue('/tmp/cached');
+      mockExec.mockResolvedValue(0);
     });
 
-    mockDownloadTool.mockResolvedValue('/tmp/downloaded');
-    mockCacheFile.mockResolvedValue('/tmp/cached');
-    
-    mockExec.mockResolvedValue(0);
+    // downloadTool returns the binary first, then the checksum file with the given contents.
+    const serveRelease = (sums: string) => {
+      fs.writeFileSync('downloaded-sums', sums);
+      mockDownloadTool.mockImplementation(async (url: string) =>
+        url.endsWith('/SHA256SUMS') ? 'downloaded-sums' : 'downloaded-binary');
+    };
 
-    await run();
+    it('downloads the release binary, checks it against SHA256SUMS and runs it', async () => {
+      serveRelease(`${sha256('binary bytes')}  ${CORE_ASSET}\n`);
 
-    expect(mockDownloadTool).toHaveBeenCalledWith('https://github.com/BudgetGate/soroban-budget-core/releases/download/v1.2.3/budget-core-linux-amd64');
-    expect(mockCacheFile).toHaveBeenCalledWith('/tmp/downloaded', 'budget-core', 'soroban-budget-core', '1.2.3');
-    // The binary path is built with path.join, so it uses the runner's separator.
-    const cachedBinary = path.join('/tmp/cached', 'budget-core');
-    expect(mockExec).toHaveBeenCalledWith('chmod', ['+x', cachedBinary]);
-    expect(mockExec).toHaveBeenCalledWith(
-      cachedBinary,
-      ['--baseline', 'base.json', '--fixture', 'fixture.json', '--rpc-url', 'https://rpc.example', '--output-json', 'new.json'],
-      expect.any(Object)
-    );
+      await run();
+
+      expect(mockDownloadTool).toHaveBeenCalledWith(`${RELEASE}/budget-core-linux-amd64`);
+      expect(mockDownloadTool).toHaveBeenCalledWith(`${RELEASE}/SHA256SUMS`);
+      expect(mockCacheFile).toHaveBeenCalledWith('downloaded-binary', 'budget-core', 'soroban-budget-core', '1.2.3');
+      // The binary path is built with path.join, so it uses the runner's separator.
+      const cachedBinary = path.join('/tmp/cached', 'budget-core');
+      expect(mockExec).toHaveBeenCalledWith('chmod', ['+x', cachedBinary]);
+      expect(mockExec).toHaveBeenCalledWith(
+        cachedBinary,
+        ['--baseline', 'base.json', '--fixture', 'fixture.json', '--rpc-url', 'https://rpc.example', '--output-json', 'new.json'],
+        expect.any(Object)
+      );
+      expect(mockSetFailed).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      { name: 'the checksum differs', sums: `${'0'.repeat(64)}  ${CORE_ASSET}\n`, error: `Checksum mismatch for ${CORE_ASSET}` },
+      { name: 'SHA256SUMS has no entry for the binary', sums: `${sha256('binary bytes')}  other-file\n`, error: `SHA256SUMS has no entry for ${CORE_ASSET}` },
+    ])('fails without caching or running the binary when $name', async ({ sums, error }) => {
+      serveRelease(sums);
+
+      await run();
+
+      expect(mockSetFailed).toHaveBeenCalledWith(expect.stringContaining(error));
+      expect(mockCacheFile).not.toHaveBeenCalled();
+      expect(mockExec).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      { platform: 'darwin', arch: 'x64' },
+      { platform: 'linux', arch: 'arm64' },
+    ])('refuses to download on $platform/$arch', async ({ platform, arch }) => {
+      (os.platform as jest.Mock).mockReturnValue(platform);
+      (os.arch as jest.Mock).mockReturnValue(arch);
+
+      await run();
+
+      expect(mockSetFailed).toHaveBeenCalledWith(expect.stringContaining('binary-version needs a Linux x64 runner'));
+      expect(mockDownloadTool).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('verifyChecksum', () => {
+    it('accepts an uppercase checksum and ignores other entries', () => {
+      fs.writeFileSync('f', 'abc');
+      const sum = crypto.createHash('sha256').update('abc').digest('hex').toUpperCase();
+      expect(() => verifyChecksum('f', `deadbeef  other\n${sum}  f\n`, 'f')).not.toThrow();
+    });
   });
 
   describe('baseline', () => {

@@ -26,7 +26,8 @@ Last updated: 2026-10-27
 - Found while doing A11: CI's own action pins (`checkout`, `setup-node`, `upload-artifact` at `@v4`) target Node 20 and are forced onto Node 24 with a warning (A19).
 - A19 done: `ci.yml` uses `actions/checkout@v7`, `setup-node@v7` and `upload-artifact@v7` (all `node24`), so CI no longer warns about Node 20.
 - A14 done: after a core error (exit code other than 0 or 1) the marked comment is updated, or created, with "The latest run failed", the exit code and a link to the workflow run; the earlier report is replaced. Core's stderr is not posted (it can contain the RPC URL) and stays in the step failure. Not run on a real PR yet.
-- Next up: needs a maintainer decision: a test repository, and a core release (C12) for A1–A3.
+- A1, A2 done: README rewritten (fixture-based workflow with `binary-version: 0.2.0`, all inputs, outputs, baseline, comment, permissions) and examples that set `binary-version`; the downloaded core binary is checked against the release's `SHA256SUMS`, and `binary-version` refuses non-Linux-x64 runners. 28 tests pass. Not yet run in a real workflow.
+- Next up: run it end to end in `BudgetGate/budgetgate-action-test` (needs the maintainer to create that repo or allow it), then A3: release `v0.2.0` when asked.
 - Not verified anywhere yet: a real cache round trip (save on a default-branch push, restore on a PR). That needs a workflow in a real repository.
 
 ## Blocked on core
@@ -63,10 +64,10 @@ The Action can't be finished end to end until core has:
 
 ## Phase 4: Usable by others (needs core C12)
 
-- [ ] A1: README example and inputs table match `action.yml`; no hand-made snapshots
-- [ ] A2: a default that obtains a working core binary; examples that run as written
+- [x] A1: README example and inputs table match `action.yml`; no hand-made snapshots
+- [x] A2: a default that obtains a working core binary; examples that run as written
 - [ ] Run the Action against a real PR in a test repository and record the result
-- [ ] A3: release and a `v1` tag (only when the maintainer asks)
+- [ ] A3: release `v0.2.0` (exact tag, no moving `v0`), after a real-workflow run and only when the maintainer asks
 
 ## Maintainer actions (Claude must not do these)
 
