@@ -37,6 +37,7 @@ jobs:
 
 - **Core binary:** `binary-version` downloads `budget-core-linux-amd64` from that core release, checks it against the release's `SHA256SUMS`, and caches it. Core releases only include a Linux x86-64 binary, so this needs a Linux x64 runner. On other runners, build core yourself and pass `binary-path`.
 - **Baseline:** run the workflow on pushes to the default branch as well as on pull requests. Each default-branch push saves the measured snapshot to the Actions cache, and pull requests compare against it. A file at `baseline-path` is used instead when it exists. With neither, every function is reported as new and the comment says no baseline was found.
+- **History for the dashboard (optional):** set `history-branch: budgetgate-history` and grant `contents: write`. Each default-branch push then appends its snapshot to `history.json` on that branch, creating the branch (with no shared history) on the first run and keeping the last 200 snapshots. Point the [dashboard](https://budgetgate-dashboard.vercel.app/) at `https://raw.githubusercontent.com/<owner>/<repo>/budgetgate-history/history.json`. Public repositories only: the dashboard reads the file without a token. A failure to write the history is a warning, not a failed step.
 - **PR comment:** one comment per pull request, updated on every run. When core cannot compare (for example, the RPC is down), the comment says the latest run failed and links the workflow run. Commenting needs `pull-requests: write`.
 
 ## Inputs
@@ -50,6 +51,7 @@ jobs:
 | `baseline-path` | No | `baseline.json` | Baseline snapshot file. When it does not exist, the cached baseline is used. |
 | `binary-version` | No | — | Core release to download, for example `0.2.0`. Linux x64 runners only. |
 | `binary-path` | No | `./budget-core` | Path to a `budget-core` binary. Wins over `binary-version`. |
+| `history-branch` | No | — (off) | Branch that keeps `history.json` for the dashboard, e.g. `budgetgate-history`. Needs `contents: write`. |
 
 ## Outputs
 
