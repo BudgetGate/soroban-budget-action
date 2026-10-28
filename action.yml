@@ -12,19 +12,19 @@ inputs:
     required: false
     default: 'baseline.json'
   new-path:
-    description: 'Path to the new snapshot JSON'
+    description: 'Path to an existing snapshot to compare when fixture-path is not set (defaults to new.json)'
     required: false
   fixture-path:
-    description: 'Path to fixture JSON (if dynamically simulating)'
+    description: 'Path to a fixture of contract calls to simulate; the measured snapshot is compared against the baseline'
     required: false
   rpc-url:
-    description: 'Soroban RPC URL'
+    description: 'Soroban RPC URL used with fixture-path (core defaults to testnet); pass it from a secret if it contains a key'
     required: false
   binary-path:
-    description: 'Path to the budget-core binary (if providing locally)'
+    description: 'Path to a budget-core binary (defaults to ./budget-core); wins over binary-version'
     required: false
   binary-version:
-    description: 'Version of budget-core to download from GitHub releases'
+    description: 'soroban-budget-core release to download, e.g. 0.2.0 (Linux x64 runners only); checked against the release SHA256SUMS'
     required: false
 
 outputs:

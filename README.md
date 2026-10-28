@@ -1,77 +1,82 @@
-# Soroban Budget Guard - GitHub Action
+# soroban-budget-action
 
-`soroban-budget-action` is a GitHub Action for the **BudgetGate** suite. It executes the `soroban-budget-core` engine directly in your CI/CD pipelines to track Soroban smart contract resource usage, prevent regressions, and automatically post detailed markdown reports as Pull Request comments.
+A GitHub Action that runs [soroban-budget-core](https://github.com/BudgetGate/soroban-budget-core) on your Soroban contract calls, comments the cost report on the pull request, and fails the check when a function's cost regresses.
 
-**Documentation:** [budgetgate.github.io/docs](https://budgetgate.github.io/docs/action/). The [setup page](https://budgetgate.github.io/docs/action/setup) shows the current workflow, which builds core from source because core has no release yet. The example below predates it.
+**Documentation:** [budgetgate.github.io/docs/action](https://budgetgate.github.io/docs/action/).
 
-## 🚀 Features
+> **Status:** early-stage. Not audited and not production-ready.
 
-- **Automated Regression Prevention:** Fails your CI workflow if a resource regression is detected (e.g. CPU instructions jump significantly).
-- **PR Comments:** Automatically comments on Pull Requests with a beautifully formatted Markdown table detailing resource usage differences.
-- **Frictionless Setup:** Integrates seamlessly into standard GitHub Action workflows.
+## Usage
 
-## 📦 Usage
-
-To use this action in your repository, add it to your workflow file (e.g., `.github/workflows/budget.yml`). 
-
-### Example Workflow
+You need a [fixture](https://budgetgate.github.io/docs/core/api-reference#fixture-format) in your repository: a JSON list of signed or `--build-only` transactions that call your deployed contract, for example `budget/fixture.json`.
 
 ```yaml
-name: Soroban Resource Budget Guard
+name: Budget Gate
+
 on:
   pull_request:
     branches: [ main ]
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: read
+  pull-requests: write
 
 jobs:
-  budget-check:
+  budget:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v7
-      
-      # (Optional) Generate your baseline.json and new.json here using Soroban CLI
+      - uses: actions/checkout@v7
 
-      - name: Run Budget Action
-        uses: BudgetGate/soroban-budget-action@v1
+      - uses: BudgetGate/soroban-budget-action@v0.2.0
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          baseline-path: 'path/to/baseline.json'
-          new-path: 'path/to/new.json'
-          # binary-path: './budget-core' # Optional: path to a pre-compiled binary
+          fixture-path: budget/fixture.json
+          binary-version: 0.2.0
 ```
 
-## 📥 Inputs
+- **Core binary:** `binary-version` downloads `budget-core-linux-amd64` from that core release, checks it against the release's `SHA256SUMS`, and caches it. Core releases only include a Linux x86-64 binary, so this needs a Linux x64 runner. On other runners, build core yourself and pass `binary-path`.
+- **Baseline:** run the workflow on pushes to the default branch as well as on pull requests. Each default-branch push saves the measured snapshot to the Actions cache, and pull requests compare against it. A file at `baseline-path` is used instead when it exists. With neither, every function is reported as new and the comment says no baseline was found.
+- **PR comment:** one comment per pull request, updated on every run. When core cannot compare (for example, the RPC is down), the comment says the latest run failed and links the workflow run. Commenting needs `pull-requests: write`.
 
-| Input | Description | Required | Default |
-|-------|-------------|----------|---------|
-| `github-token` | The GitHub token used to authenticate and post PR comments. | No | `${{ github.token }}` |
-| `baseline-path` | The file path to the baseline snapshot JSON. | No | `baseline.json` |
-| `new-path` | The file path to the new/current snapshot JSON. | No | `new.json` |
-| `binary-path` | The path to the `budget-core` binary to execute. | No | `./budget-core` |
+## Inputs
 
-## 📤 Outputs
+| Input | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `github-token` | No | `${{ github.token }}` | Token used to post the PR comment. |
+| `fixture-path` | No | — | Fixture to simulate with `simulateTransaction`. The measured snapshot becomes the comparison. |
+| `rpc-url` | No | core's default (testnet) | Soroban RPC endpoint, used with `fixture-path`. If it contains an API key, pass it from a secret. |
+| `new-path` | No | `new.json` | An existing snapshot to compare, used when `fixture-path` is not set. |
+| `baseline-path` | No | `baseline.json` | Baseline snapshot file. When it does not exist, the cached baseline is used. |
+| `binary-version` | No | — | Core release to download, for example `0.2.0`. Linux x64 runners only. |
+| `binary-path` | No | `./budget-core` | Path to a `budget-core` binary. Wins over `binary-version`. |
+
+## Outputs
 
 | Output | Description |
 |--------|-------------|
-| `regression_detected` | Returns `"true"` if a regression was found, or `"false"` if resources are stable. |
+| `regression_detected` | `"true"` when core exited `1` (a regression), otherwise `"false"`. Also `"false"` when core failed, so check the step's outcome too. |
 
-## 🛠️ Development
+## Examples
 
-This action is written in TypeScript and packaged using `@vercel/ncc`.
+[`examples/`](examples/) has a single-contract workflow and a monorepo workflow that only runs when contract code changes.
 
-### Install Dependencies
+## Development
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). In short, with Node.js 24:
+
 ```bash
-npm install
+npm ci
+npm test          # Jest; GitHub, core and the cache are mocked
+npm run build     # bundles src/ into dist/index.js, which action.yml runs
 ```
 
-### Run Tests
-```bash
-npm test
-```
+Commit `dist/index.js` with every change under `src/`; CI fails when it differs from a fresh build.
 
-### Build & Package
-Before committing changes to the action, you must compile the TypeScript code into a single executable JavaScript file:
-```bash
-npm run build
-```
-This generates the `./dist/index.js` file which is executed by the GitHub Actions runner.
+## Security
+
+See [SECURITY.md](SECURITY.md).
+
+## License
+
+[MIT](LICENSE)
