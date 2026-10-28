@@ -112807,7 +112807,8 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.BASELINE_CACHE_PREFIX = exports.BASELINE_CACHE_PATH = exports.COMMENT_MARKER = void 0;
+exports.CORE_ASSET = exports.BASELINE_CACHE_PREFIX = exports.BASELINE_CACHE_PATH = exports.COMMENT_MARKER = void 0;
+exports.verifyChecksum = verifyChecksum;
 exports.failedRunComment = failedRunComment;
 exports.run = run;
 const cache = __importStar(__nccwpck_require__(5116));
@@ -112815,7 +112816,9 @@ const core = __importStar(__nccwpck_require__(37484));
 const github = __importStar(__nccwpck_require__(93228));
 const exec = __importStar(__nccwpck_require__(95236));
 const tc = __importStar(__nccwpck_require__(33472));
+const crypto = __importStar(__nccwpck_require__(76982));
 const fs = __importStar(__nccwpck_require__(79896));
+const os = __importStar(__nccwpck_require__(70857));
 const path = __importStar(__nccwpck_require__(16928));
 // Hidden marker that identifies the Budget Gate report comment on a PR.
 exports.COMMENT_MARKER = '<!-- budgetgate-report -->';
@@ -112823,6 +112826,21 @@ exports.COMMENT_MARKER = '<!-- budgetgate-report -->';
 // always saved and restored at this one path.
 exports.BASELINE_CACHE_PATH = path.join('.budgetgate', 'baseline.json');
 exports.BASELINE_CACHE_PREFIX = 'budgetgate-baseline-';
+// Core releases publish one binary and a checksum file for it (core's release.yml).
+exports.CORE_ASSET = 'budget-core-linux-amd64';
+const CORE_RELEASES = 'https://github.com/BudgetGate/soroban-budget-core/releases/download';
+// verifyChecksum checks a downloaded file against its line in a SHA256SUMS file
+// (`<sha256>  <name>` per line, as written by sha256sum).
+function verifyChecksum(filePath, sums, name) {
+    const line = sums.split('\n').map((l) => l.trim().split(/\s+/)).find((parts) => parts[1] === name);
+    if (!line) {
+        throw new Error(`SHA256SUMS has no entry for ${name}`);
+    }
+    const actual = crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
+    if (actual !== line[0].toLowerCase()) {
+        throw new Error(`Checksum mismatch for ${name}: expected ${line[0]}, got ${actual}`);
+    }
+}
 // A baseline with no functions: core then reports every function as new.
 const EMPTY_BASELINE = '{"schema_version":"2.0","functions":[]}\n';
 // resolveBaseline picks the baseline to compare against: a file at baseline-path if it exists,
@@ -112917,9 +112935,15 @@ async function run() {
         const binaryVersion = core.getInput('binary-version');
         // Download binary if version is specified
         if (binaryVersion && !binaryPath) {
+            if (os.platform() !== 'linux' || os.arch() !== 'x64') {
+                throw new Error(`binary-version needs a Linux x64 runner: core releases only include ${exports.CORE_ASSET}. Build core and pass binary-path instead.`);
+            }
             core.info(`Downloading soroban-budget-core v${binaryVersion}...`);
-            const url = `https://github.com/BudgetGate/soroban-budget-core/releases/download/v${binaryVersion}/budget-core-linux-amd64`;
-            const downloadPath = await tc.downloadTool(url);
+            const release = `${CORE_RELEASES}/v${binaryVersion}`;
+            const downloadPath = await tc.downloadTool(`${release}/${exports.CORE_ASSET}`);
+            const sumsPath = await tc.downloadTool(`${release}/SHA256SUMS`);
+            verifyChecksum(downloadPath, fs.readFileSync(sumsPath, 'utf8'), exports.CORE_ASSET);
+            core.info(`Checksum of ${exports.CORE_ASSET} matches the release's SHA256SUMS.`);
             // Cache the tool
             const cachedPath = await tc.cacheFile(downloadPath, 'budget-core', 'soroban-budget-core', binaryVersion);
             binaryPath = path.join(cachedPath, 'budget-core');
