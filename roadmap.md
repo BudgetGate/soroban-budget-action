@@ -6,7 +6,7 @@ Last updated: 2026-10-28
 
 ## Where I left off
 
-- `main` is at `467b83f` (after #27, tagged `v0.2.0`). `dist/` is in sync with `src/` (CI's rebuild check passed 2026-10-28); 38 of 38 tests pass on `main` (checked locally 2026-10-28).
+- `main` is at `b1ae9b7` (after #29; `v0.2.0` is tagged on `467b83f`). `dist/` is in sync with `src/` (CI's rebuild check passed 2026-10-28); 38 of 38 tests pass on `main` (checked locally 2026-10-28).
 - A13 done: the tool-cache test builds its expected path with `path.join`; 6 of 6 tests pass on Windows and Linux.
 - Core is feature-complete for its work order (exit code 2 for errors, report-only stdout, live network caps). The docs site's setup page shows the interim workflow: build core from source, pass `binary-path`.
 - A10 done: CI rebuilds `dist/` and fails if it differs from the committed copy.
@@ -84,5 +84,5 @@ Nothing left — core delivered all three, so no part of this repo's work order 
 
 - [ ] Branch protection on `main`: currently 0 required reviews and no required status checks. Consider requiring `Action CI / build-and-test`.
 - [ ] Repo topics and description.
-- [ ] Enable private vulnerability reporting (Settings → Security). `SECURITY.md` points to it (A20); off on 2026-10-28.
-- [ ] Delete branches `docs/claude-md-and-roadmap` and `feature/complete-missing-specs`; both are fully in `main` (checked 2026-10-26).
+- [x] Enable private vulnerability reporting (Settings → Security). `SECURITY.md` points to it (A20); enabled by the maintainer 2026-10-28 (API: `enabled: true`).
+- [x] Delete branches `docs/claude-md-and-roadmap` and `feature/complete-missing-specs` (deleted in the 2026-10-28 cleanup; `main` is the only branch).
