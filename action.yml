@@ -26,6 +26,9 @@ inputs:
   binary-version:
     description: 'soroban-budget-core release to download, e.g. 0.2.0 (Linux x64 runners only); checked against the release SHA256SUMS'
     required: false
+  history-branch:
+    description: 'Branch to keep history.json on (e.g. budgetgate-history). Each default-branch push appends its snapshot; needs contents: write. Off when empty'
+    required: false
 
 outputs:
   regression_detected:

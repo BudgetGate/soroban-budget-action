@@ -7,7 +7,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as crypto from 'crypto';
-import { run, verifyChecksum, COMMENT_MARKER, BASELINE_CACHE_PATH, BASELINE_CACHE_PREFIX, CORE_ASSET } from '../src/index';
+import { run, verifyChecksum, COMMENT_MARKER, BASELINE_CACHE_PATH, BASELINE_CACHE_PREFIX, CORE_ASSET, HISTORY_FILE, HISTORY_LIMIT } from '../src/index';
 
 jest.mock('@actions/cache');
 jest.mock('@actions/core');
@@ -372,7 +372,7 @@ old report` }]);
       expect(mockExec).toHaveBeenCalledWith('chmod', ['+x', cachedBinary]);
       expect(mockExec).toHaveBeenCalledWith(
         cachedBinary,
-        ['--baseline', 'base.json', '--fixture', 'fixture.json', '--rpc-url', 'https://rpc.example', '--output-json', 'new.json'],
+        ['--baseline', 'base.json', '--fixture', 'fixture.json', '--rpc-url', 'https://rpc.example', '--output-json', 'new.json', '--commit-sha', 'headsha'],
         expect.any(Object)
       );
       expect(mockSetFailed).not.toHaveBeenCalled();
@@ -410,6 +410,134 @@ old report` }]);
       fs.writeFileSync('f', 'abc');
       const sum = crypto.createHash('sha256').update('abc').digest('hex').toUpperCase();
       expect(() => verifyChecksum('f', `deadbeef  other\n${sum}  f\n`, 'f')).not.toThrow();
+    });
+  });
+
+  describe('history', () => {
+    const NEW_SNAPSHOT = { schema_version: '2.0', commit_sha: 'headsha', functions: [{ name: 'f' }] };
+    const notFound = Object.assign(new Error('Not Found'), { status: 404 });
+    let repos: Record<string, jest.Mock>;
+    let git: Record<string, jest.Mock>;
+
+    const push = (ref: string) => {
+      Object.defineProperty(github, 'context', {
+        value: {
+          payload: { repository: { default_branch: 'main' }, before: 'prevsha' },
+          repo: { owner: 'test-owner', repo: 'test-repo' },
+          sha: 'headsha',
+          ref,
+        },
+        writable: true,
+      });
+    };
+    const inputs = (overrides: Record<string, string> = {}) => (name: string) =>
+      ({ 'github-token': 'fake-token', 'fixture-path': 'fixture.json', 'binary-path': './budget-core', 'history-branch': 'budgetgate-history', ...overrides } as Record<string, string>)[name] ?? '';
+    const existingHistory = (snapshots: unknown[]) => ({
+      data: { type: 'file', sha: 'filesha', content: Buffer.from(JSON.stringify({ snapshots })).toString('base64') },
+    });
+    const writtenSnapshots = (): unknown[] => {
+      const { content } = repos.createOrUpdateFileContents.mock.calls[0][0];
+      return JSON.parse(Buffer.from(content, 'base64').toString('utf8')).snapshots;
+    };
+
+    beforeEach(() => {
+      push('refs/heads/main');
+      mockGetInput.mockImplementation(inputs());
+      mockExec.mockImplementation(async () => {
+        fs.writeFileSync('new.json', JSON.stringify(NEW_SNAPSHOT));
+        return 0;
+      });
+      repos = {
+        getBranch: jest.fn().mockResolvedValue({ data: {} }),
+        getContent: jest.fn(),
+        createOrUpdateFileContents: jest.fn().mockResolvedValue({ data: {} }),
+      };
+      git = {
+        createTree: jest.fn().mockResolvedValue({ data: { sha: 'treesha' } }),
+        createCommit: jest.fn().mockResolvedValue({ data: { sha: 'commitsha' } }),
+        createRef: jest.fn().mockResolvedValue({ data: {} }),
+      };
+      (github.getOctokit as jest.Mock).mockReturnValue({ paginate: mockPaginate, rest: { repos, git, issues: {} } });
+    });
+
+    it('creates the history branch with no parent commit when it does not exist', async () => {
+      repos.getBranch.mockRejectedValue(notFound);
+
+      await run();
+
+      const tree = git.createTree.mock.calls[0][0];
+      expect(tree.tree).toEqual([expect.objectContaining({ path: HISTORY_FILE, mode: '100644', type: 'blob' })]);
+      expect(JSON.parse(tree.tree[0].content)).toEqual({ snapshots: [NEW_SNAPSHOT] });
+      expect(git.createCommit).toHaveBeenCalledWith(expect.objectContaining({ tree: 'treesha', parents: [], message: 'Add Budget Gate snapshot for headsha' }));
+      expect(git.createRef).toHaveBeenCalledWith({ owner: 'test-owner', repo: 'test-repo', ref: 'refs/heads/budgetgate-history', sha: 'commitsha' });
+      expect(repos.createOrUpdateFileContents).not.toHaveBeenCalled();
+    });
+
+    it('appends to the existing history and updates the file by its sha', async () => {
+      repos.getContent.mockResolvedValue(existingHistory([{ commit_sha: 'a' }, { commit_sha: 'b' }]));
+
+      await run();
+
+      expect(repos.getContent).toHaveBeenCalledWith({ owner: 'test-owner', repo: 'test-repo', path: HISTORY_FILE, ref: 'budgetgate-history' });
+      expect(repos.createOrUpdateFileContents).toHaveBeenCalledWith(expect.objectContaining({ path: HISTORY_FILE, branch: 'budgetgate-history', sha: 'filesha' }));
+      expect(writtenSnapshots()).toEqual([{ commit_sha: 'a' }, { commit_sha: 'b' }, NEW_SNAPSHOT]);
+      expect(mockSetFailed).not.toHaveBeenCalled();
+    });
+
+    it(`keeps only the last ${HISTORY_LIMIT} snapshots`, async () => {
+      const full = Array.from({ length: HISTORY_LIMIT }, (_, i) => ({ commit_sha: `c${i}` }));
+      repos.getContent.mockResolvedValue(existingHistory(full));
+
+      await run();
+
+      const written = writtenSnapshots();
+      expect(written).toHaveLength(HISTORY_LIMIT);
+      expect(written[0]).toEqual({ commit_sha: 'c1' });
+      expect(written[HISTORY_LIMIT - 1]).toEqual(NEW_SNAPSHOT);
+    });
+
+    it('creates the file on an existing branch without one', async () => {
+      repos.getContent.mockRejectedValue(notFound);
+
+      await run();
+
+      expect(repos.createOrUpdateFileContents).toHaveBeenCalledWith(expect.objectContaining({ sha: undefined }));
+      expect(writtenSnapshots()).toEqual([NEW_SNAPSHOT]);
+    });
+
+    it('records the pushed commit in the snapshot core writes', async () => {
+      repos.getContent.mockRejectedValue(notFound);
+
+      await run();
+
+      expect(mockExec).toHaveBeenCalledWith('./budget-core', expect.arrayContaining(['--commit-sha', 'headsha']), expect.any(Object));
+    });
+
+    it.each([
+      { name: 'the file is not a history', setup: () => repos.getContent.mockResolvedValue({ data: { type: 'file', sha: 's', content: Buffer.from('{"other":1}').toString('base64') } }), warning: 'has no "snapshots" array' },
+      { name: 'the GitHub API fails', setup: () => repos.getBranch.mockRejectedValue(Object.assign(new Error('Server Error'), { status: 500 })), warning: 'Server Error' },
+    ])('only warns, without writing, when $name', async ({ setup, warning }) => {
+      setup();
+
+      await run();
+
+      expect(core.warning).toHaveBeenCalledWith(expect.stringContaining(warning));
+      expect(repos.createOrUpdateFileContents).not.toHaveBeenCalled();
+      expect(mockSetFailed).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      { name: 'history-branch is not set', act: () => mockGetInput.mockImplementation(inputs({ 'history-branch': '' })) },
+      { name: 'the push is to another branch', act: () => push('refs/heads/feature') },
+      { name: 'core fails', act: () => mockExec.mockResolvedValue(2) },
+    ])('does not touch the history when $name', async ({ act }) => {
+      act();
+
+      await run();
+
+      expect(repos.getBranch).not.toHaveBeenCalled();
+      expect(git.createRef).not.toHaveBeenCalled();
+      expect(repos.createOrUpdateFileContents).not.toHaveBeenCalled();
     });
   });
 
