@@ -61,6 +61,7 @@ Nothing left — core delivered all three, so no part of this repo's work order 
 - [x] A18: `CONTRIBUTING.md` written for this TypeScript repo (Node, `npm ci`, `npm test`, `npm run build`, committing `dist/`)
 - [x] A11: check whether `runs.using: node20` is still supported; move to the current runtime if not
 - [x] A19: move `ci.yml`'s `actions/*` pins to current majors (all three are `node20` at `@v4`)
+- [x] A20: `SECURITY.md` points to GitHub private vulnerability reporting instead of `security@budgetgate.io`, whose domain does not exist (found 2026-10-28)
 
 ## Phase 2: Baseline persistence and PR comment
 
@@ -83,4 +84,5 @@ Nothing left — core delivered all three, so no part of this repo's work order 
 
 - [ ] Branch protection on `main`: currently 0 required reviews and no required status checks. Consider requiring `Action CI / build-and-test`.
 - [ ] Repo topics and description.
+- [ ] Enable private vulnerability reporting (Settings → Security). `SECURITY.md` points to it (A20); off on 2026-10-28.
 - [ ] Delete branches `docs/claude-md-and-roadmap` and `feature/complete-missing-specs`; both are fully in `main` (checked 2026-10-26).

@@ -29,7 +29,7 @@ State of `main` (`c03f4c2`) on 2026-10-26. `package.json` name `soroban-budget-a
 | `lib/` | `tsc` output (`tsconfig.json` `outDir`); not used by the build (`ncc`) or tests (`ts-jest`), and gitignored. |
 | `examples/` | `rust-project.yml`, `monorepo.yml`. Both pin `@v0.2.0`, set `fixture-path` and `binary-version: '0.2.0'`, and grant `pull-requests: write`. |
 | `.github/workflows/ci.yml` | `Action CI`, job `build-and-test` (`actions/checkout@v7`, `setup-node@v7`, `upload-artifact@v7`, all `node24`): Node 24 (the Action's runtime), `npm ci`, `npm run build`, then fails if the build changed `dist/` (`git diff --quiet -- dist`), then `npm test`. Runs on push/PR to `main` only. `dist/` is in `.gitignore` with only `dist/index.js` force-tracked, so the check covers that file, not new output files. |
-| Other | `CONTRIBUTING.md` (local setup, the `dist/` rule, change rules), `SECURITY.md` (reporting address `security@budgetgate.io`, not checked to be deliverable; states the project is unaudited). User docs are on the docs site, linked from the README. |
+| Other | `CONTRIBUTING.md` (local setup, the `dist/` rule, change rules), `SECURITY.md` (reports through GitHub private vulnerability reporting, which the maintainer must enable in the repo settings; states the project is unaudited and not production-ready). User docs are on the docs site, linked from the README. |
 | Dependencies | `@actions/cache ^5.3.0` (keep below 6: 6.x is ESM-only, cannot be `require`d from this CommonJS build, and ncc then bundles a "Cannot find module" stub; 6.2.0 did exactly that until A5), `@actions/core ^1.10.1`, `@actions/exec ^1.1.1`, `@actions/github ^5.1.1`, `@actions/tool-cache ^2.0.1` |
 | Dev dependencies | `@vercel/ncc ^0.44.1`, `jest ^30.4.2`, `ts-jest ^29.4.12`, `typescript ^5.5.4`, `esbuild`, `@types/jest`, `@types/node ^26.1.2` |
 
@@ -39,6 +39,8 @@ Checked 2026-10-26 against `origin/main` (`c03f4c2`).
 
 | ID | Defect | Evidence |
 |----|--------|----------|
+
+Resolved and removed: A20 (found 2026-10-28): `SECURITY.md` sent reports to `security@budgetgate.io`, but `budgetgate.io` does not exist (NXDOMAIN on Google DNS), so reports could not arrive and whoever registered the domain would receive them. It now points to GitHub private vulnerability reporting (maintainer's decision); that was off on 2026-10-28 and has to be enabled in the repo settings.
 
 ## 4. Work order for this repo
 
