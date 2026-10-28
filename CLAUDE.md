@@ -39,14 +39,13 @@ Checked 2026-10-26 against `origin/main` (`c03f4c2`).
 
 | ID | Defect | Evidence |
 |----|--------|----------|
-| A3 | README and `examples/*.yml` pin `@v0.2.0`, which does not exist yet: the Action's only tag is `v0.1.0` and it has no release. Cut `v0.2.0` after the Action has run in a real workflow, when the maintainer asks. Exact version tags only, no moving `v0` tag (it would need force-pushed tags). | GitHub API |
 
 ## 4. Work order for this repo
 
 Core's real measurement has landed (core #9, #8; verified on testnet), so the Action can be run against real numbers today by building core from source and passing `binary-path` (the docs site's setup page does this). Core exits 0 pass / 1 regression / 2 error (core #15), and the Action uses that (A8 fixed). Core v0.2.0 is released; `binary-version: 0.2.0` downloads and checks it.
 
-1. Run the Action end to end in a test repository (`BudgetGate/budgetgate-action-test`): baseline saved on a default-branch push, a regression PR comment updated on a second push, a failed-run comment.
-2. A3: release `v0.2.0` when the maintainer asks.
+1. Done 2026-10-28: run end to end in `BudgetGate/budgetgate-action-test` (push run and PRs #1–#3, recorded in #25 and #26), and A3: release `v0.2.0`, an exact tag (no moving `v0`).
+2. Next releases: a new exact tag (`v0.2.1`, `v0.3.0`, …) only when the maintainer asks, after `main` CI is green; bump `package.json` to match first. Never move or force-push a tag.
 
 `roadmap.md` tracks progress against this list.
 

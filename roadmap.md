@@ -6,7 +6,7 @@ Last updated: 2026-10-28
 
 ## Where I left off
 
-- `main` is at `f897020` (after #24 and #25). `dist/` is in sync with `src/` (CI's rebuild check passed 2026-10-28); 38 of 38 tests pass on `main` (checked locally 2026-10-28).
+- `main` is at `d397ce0` (after #26). `dist/` is in sync with `src/` (CI's rebuild check passed 2026-10-28); 38 of 38 tests pass on `main` (checked locally 2026-10-28).
 - A13 done: the tool-cache test builds its expected path with `path.join`; 6 of 6 tests pass on Windows and Linux.
 - Core is feature-complete for its work order (exit code 2 for errors, report-only stdout, live network caps). The docs site's setup page shows the interim workflow: build core from source, pass `binary-path`.
 - A10 done: CI rebuilds `dist/` and fails if it differs from the committed copy.
@@ -36,7 +36,8 @@ Last updated: 2026-10-28
   - PR #2, RPC URL broken from the start (run 40728712305): comment created with "The latest run failed", exit code 2 and a run link, no stderr (A14 create path); step failed with core's error.
   - PR #3, unchanged v1 fixture (run 40729078960): cache restored, "No regression", comment posted, step green.
   - PRs #1 and #2 are closed with the results. PR #3 moves the test repo's workflow from the deleted `@feat/snapshot-history` to `@main`; it is the maintainer's to merge.
-- Next up: A3, release the Action (`v0.2.0` tag and a moving `v0` tag), only when the maintainer asks. Then the test repo and the docs can pin the release instead of `@main`.
+- A3 done (2026-10-28, maintainer's request): `package.json` bumped to `0.2.0`, then `v0.2.0` tagged on `main` as an exact tag (no moving `v0`: moving it would need a force-pushed tag) with a GitHub release. The README and examples already pin `@v0.2.0`.
+- Next up: point the test repo and the docs site at `@v0.2.0` instead of `@main`.
 
 ## Blocked on core
 
@@ -75,7 +76,7 @@ Nothing left — core delivered all three, so no part of this repo's work order 
 - [x] A1: README example and inputs table match `action.yml`; no hand-made snapshots
 - [x] A2: a default that obtains a working core binary; examples that run as written
 - [x] Run the Action against a real PR in a test repository and record the result (`budgetgate-action-test` PRs #1–#3, 2026-10-28: regression, comment update, failed-run create and replace, cache restore, clean pass)
-- [ ] A3: release `v0.2.0` (exact tag, no moving `v0`), after a real-workflow run and only when the maintainer asks
+- [x] A3: release `v0.2.0` (exact tag, no moving `v0`), after a real-workflow run and only when the maintainer asks
 
 ## Maintainer actions (Claude must not do these)
 
