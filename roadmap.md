@@ -6,7 +6,7 @@ Last updated: 2026-10-28
 
 ## Where I left off
 
-- `main` is at `2c05928` (after #23). `dist/` is in sync with `src/` (CI's rebuild check passed 2026-10-28); 28 of 28 tests pass on `main` (checked locally 2026-10-28).
+- `main` is at `f897020` (after #24 and #25). `dist/` is in sync with `src/` (CI's rebuild check passed 2026-10-28); 38 of 38 tests pass on `main` (checked locally 2026-10-28).
 - A13 done: the tool-cache test builds its expected path with `path.join`; 6 of 6 tests pass on Windows and Linux.
 - Core is feature-complete for its work order (exit code 2 for errors, report-only stdout, live network caps). The docs site's setup page shows the interim workflow: build core from source, pass `binary-path`.
 - A10 done: CI rebuilds `dist/` and fails if it differs from the committed copy.
@@ -25,12 +25,18 @@ Last updated: 2026-10-28
 - A11 done: `runs.using: node24`, CI on Node 24. GitHub made Node 24 the runner default on 2026-06-16 (forcing `node20` actions onto it with an annotation) and removed Node 20 on 2026-09-23.
 - Found while doing A11: CI's own action pins (`checkout`, `setup-node`, `upload-artifact` at `@v4`) target Node 20 and are forced onto Node 24 with a warning (A19).
 - A19 done: `ci.yml` uses `actions/checkout@v7`, `setup-node@v7` and `upload-artifact@v7` (all `node24`), so CI no longer warns about Node 20.
-- A14 done: after a core error (exit code other than 0 or 1) the marked comment is updated, or created, with "The latest run failed", the exit code and a link to the workflow run; the earlier report is replaced. Core's stderr is not posted (it can contain the RPC URL) and stays in the step failure. Not run on a real PR yet.
+- A14 done: after a core error (exit code other than 0 or 1) the marked comment is updated, or created, with "The latest run failed", the exit code and a link to the workflow run; the earlier report is replaced. Core's stderr is not posted (it can contain the RPC URL) and stays in the step failure. Ran on real PRs 2026-10-28 (see below).
 - A1, A2 done: README rewritten (fixture-based workflow with `binary-version: 0.2.0`, all inputs, outputs, baseline, comment, permissions) and examples that set `binary-version`; the downloaded core binary is checked against the release's `SHA256SUMS`, and `binary-version` refuses non-Linux-x64 runners. 28 tests pass, and the release-download path has now run in a real workflow (see the first real run below).
 - Dashboard D5 (maintainer's decision, 2026-10-28; #24): opt-in `history-branch` input. On each default-branch push the Action appends the snapshot to `history.json` on that branch (created with no parent commit; last 200 snapshots kept); the dashboard reads it from raw.githubusercontent.com, which sends `access-control-allow-origin: *` (checked 2026-10-28). Fixture runs now pass `--commit-sha`. 38 tests. Ran in a real workflow: the first real run below created the branch and appended `history.json`.
 - First real end-to-end run (2026-10-28): `BudgetGate/budgetgate-action-test` (created by the maintainer), workflow run [40695137554](https://github.com/BudgetGate/budgetgate-action-test/actions/runs/40695137554), a push to `main`, every step green. The Action ran at `@feat/snapshot-history` (`main` + `cb24f8a`), downloaded core `v0.2.0` through `binary-version`, checked it against `SHA256SUMS` and measured the counter v1 `bump` fixture on testnet: 291,573 CPU instructions, 0 read bytes, 80 write bytes, 3 read / 1 write entries, `pct_of_network_cap` 0.75 (the highest of any metric — 3 footprint entries of the 400 limit, per core's `SCHEMA.md`; CPU alone is 0.07% of the 400,000,000 cap). Those numbers are the same ones core measured for the same contract in `soroban-budget-core/testdata/counter`, so the Action's fixture path agrees with core. It then saved the baseline cache (`budgetgate-baseline-cedf1c2…`, 441 bytes) and appended `history.json` (schema `2.0`, 543 bytes) to `budgetgate-history` in commit `ab48e55`.
-- What that run still leaves untested: the PR-triggered path. `budgetgate-action-test` has no pull requests, so A9's marker-comment update and A14's "latest run failed" comment have never run on a real PR, and A5's cache **restore** is unverified (only the save half: one cache entry written by the default-branch push). #24 is now merged (2026-10-28), so the test repo's workflow should move from `@feat/snapshot-history` to `@main` until the Action is released.
-- Next up: open a PR in `budgetgate-action-test` that switches the fixture to the v2 counter contract and record the regression comment (Phase 4's last box), then A3: release `v0.2.0` of the Action when the maintainer asks.
+- Real pull requests in `budgetgate-action-test` (2026-10-28, Action at `@main` = `f897020`), every PR path now verified on GitHub:
+  - PR #1, fixture switched to counter v2 (run 40728333666): baseline **restored** from cache entry `budgetgate-baseline-cedf1c2…`, an exact hit on the base commit, so A5's save-and-restore round trip works. Core exit 1; comment `6474905442` posted with CPU 291,573 → 449,005 (+53.99%), write bytes 80 → 380, read entries 3 → 6, write entries 1 → 4, the same numbers as core's counter check; step failed as a regression.
+  - PR #1, empty commit (run 40728531842): the same comment updated, still one comment (A9).
+  - PR #1, RPC URL broken (run 40728868808): the same comment replaced with "The latest run failed" (A14 replace path).
+  - PR #2, RPC URL broken from the start (run 40728712305): comment created with "The latest run failed", exit code 2 and a run link, no stderr (A14 create path); step failed with core's error.
+  - PR #3, unchanged v1 fixture (run 40729078960): cache restored, "No regression", comment posted, step green.
+  - PRs #1 and #2 are closed with the results. PR #3 moves the test repo's workflow from the deleted `@feat/snapshot-history` to `@main`; it is the maintainer's to merge.
+- Next up: A3, release the Action (`v0.2.0` tag and a moving `v0` tag), only when the maintainer asks. Then the test repo and the docs can pin the release instead of `@main`.
 
 ## Blocked on core
 
@@ -68,7 +74,7 @@ Nothing left — core delivered all three, so no part of this repo's work order 
 
 - [x] A1: README example and inputs table match `action.yml`; no hand-made snapshots
 - [x] A2: a default that obtains a working core binary; examples that run as written
-- [ ] Run the Action against a real PR in a test repository and record the result (the push-to-`main` half ran green in `budgetgate-action-test` on 2026-10-28; no PR has been opened there yet, so the comment path is still unrecorded)
+- [x] Run the Action against a real PR in a test repository and record the result (`budgetgate-action-test` PRs #1–#3, 2026-10-28: regression, comment update, failed-run create and replace, cache restore, clean pass)
 - [ ] A3: release `v0.2.0` (exact tag, no moving `v0`), after a real-workflow run and only when the maintainer asks
 
 ## Maintainer actions (Claude must not do these)
