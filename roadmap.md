@@ -6,7 +6,7 @@ Last updated: 2026-10-28
 
 ## Where I left off
 
-- `main` is at `d397ce0` (after #26). `dist/` is in sync with `src/` (CI's rebuild check passed 2026-10-28); 38 of 38 tests pass on `main` (checked locally 2026-10-28).
+- `main` is at `467b83f` (after #27, tagged `v0.2.0`). `dist/` is in sync with `src/` (CI's rebuild check passed 2026-10-28); 38 of 38 tests pass on `main` (checked locally 2026-10-28).
 - A13 done: the tool-cache test builds its expected path with `path.join`; 6 of 6 tests pass on Windows and Linux.
 - Core is feature-complete for its work order (exit code 2 for errors, report-only stdout, live network caps). The docs site's setup page shows the interim workflow: build core from source, pass `binary-path`.
 - A10 done: CI rebuilds `dist/` and fails if it differs from the committed copy.
@@ -37,7 +37,8 @@ Last updated: 2026-10-28
   - PR #3, unchanged v1 fixture (run 40729078960): cache restored, "No regression", comment posted, step green.
   - PRs #1 and #2 are closed with the results. PR #3 moves the test repo's workflow from the deleted `@feat/snapshot-history` to `@main`; it is the maintainer's to merge.
 - A3 done (2026-10-28, maintainer's request): `package.json` bumped to `0.2.0`, then `v0.2.0` tagged on `main` as an exact tag (no moving `v0`: moving it would need a force-pushed tag) with a GitHub release. The README and examples already pin `@v0.2.0`.
-- Next up: point the test repo and the docs site at `@v0.2.0` instead of `@main`.
+- `@v0.2.0` ran in a real workflow: test repo PR #4 (run 40736659402) resolved the tag to `467b83f`, downloaded core v0.2.0, matched `SHA256SUMS`, restored the cached baseline and posted "No regression". The test repo's workflow (its PR #4) and the docs site (docs #30) move to `@v0.2.0`.
+- Next up: no open defects. A new release only when the maintainer asks.
 
 ## Blocked on core
 
