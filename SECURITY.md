@@ -1,12 +1,13 @@
-# Security Policy
+# Security policy
 
-## Supported Versions
+Budget Gate is early-stage software. It has not been audited and is not production-ready.
 
-Currently, only the latest release of this tool is supported with security updates.
+## Supported versions
 
-## Reporting a Vulnerability
+Only the latest release gets security fixes.
 
-Please report security vulnerabilities by emailing security@budgetgate.io. 
-We take all reports seriously and will acknowledge your email within 48 hours.
+## Reporting a vulnerability
 
-**Disclaimer:** This project is currently UNAUDITED. Use it in production environments at your own risk.
+Report it privately through GitHub: open this repository's **Security** tab and choose **Report a vulnerability** (<https://github.com/BudgetGate/soroban-budget-action/security/advisories/new>). Please do not open a public issue or pull request for a vulnerability.
+
+Include the affected version or commit, the steps to reproduce it, and what an attacker could do with it.
