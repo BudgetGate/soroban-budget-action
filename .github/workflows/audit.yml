@@ -1,0 +1,33 @@
+name: Audit
+
+# Checks dependencies for known vulnerabilities every week, so a new advisory shows up as a failed
+# run. Fails on any vulnerability in the bundled runtime dependencies, and on moderate or worse in
+# the development ones. Not a required check: a new advisory does not block unrelated pull requests.
+on:
+  schedule:
+    - cron: "23 6 * * 1"
+  workflow_dispatch:
+  pull_request:
+    branches: [ "main" ]
+    paths: [ ".github/workflows/audit.yml" ]
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+
+    - uses: actions/setup-node@v7
+      with:
+        node-version: '24.x'
+
+    - run: npm ci
+
+    - name: Runtime dependencies (bundled into dist/)
+      run: npm audit --omit=dev
+
+    - name: All dependencies, moderate or worse
+      run: npm audit --audit-level=moderate
