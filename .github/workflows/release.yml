@@ -1,0 +1,64 @@
+name: Release
+
+# Pushing an exact tag like v0.2.3 checks that it matches package.json's version, that the
+# committed dist/ is a fresh build of src/ (the code users run), and that the tests pass, then
+# publishes a GitHub release with generated notes. No moving major tag (v0) is created or moved.
+# A pull request that changes this file runs the checks without publishing.
+on:
+  push:
+    tags: [ "v*" ]
+  pull_request:
+    branches: [ "main" ]
+    paths: [ ".github/workflows/release.yml" ]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+
+    - uses: actions/setup-node@v7
+      with:
+        node-version: '24.x'
+
+    - name: Tag matches package.json
+      if: startsWith(github.ref, 'refs/tags/v')
+      run: |
+        version="$(node -p "require('./package.json').version")"
+        if [ "$GITHUB_REF_NAME" != "v$version" ]; then
+          echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $version. Bump package.json first."
+          exit 1
+        fi
+
+    - run: npm ci
+    - run: npm run build
+
+    - name: Committed dist/ is a fresh build
+      run: |
+        if [ -n "$(git status --porcelain -- dist)" ]; then
+          echo "::error::dist/ does not match a fresh build of src/; the release would run other code."
+          git status --short -- dist
+          exit 1
+        fi
+
+    - run: npm test
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - name: Create the release
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: >
+        gh release create "$GITHUB_REF_NAME"
+        --repo "$GITHUB_REPOSITORY"
+        --verify-tag
+        --title "$GITHUB_REF_NAME"
+        --generate-notes
