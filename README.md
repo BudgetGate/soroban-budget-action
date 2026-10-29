@@ -10,7 +10,9 @@ A GitHub Action that runs [soroban-budget-core](https://github.com/BudgetGate/so
 
 ## Usage
 
-You need a [fixture](https://budgetgate.github.io/docs/core/api-reference#fixture-format) in your repository: a JSON list of signed or `--build-only` transactions that call your deployed contract, for example `budget/fixture.json`.
+You need a [fixture](https://budgetgate.github.io/docs/core/api-reference#fixture-format): a JSON list of signed or `--build-only` transactions that call a deployed contract, for example `budget/fixture.json`.
+
+**A fixture measures whatever contract it calls.** If it calls a contract you deployed once, a pull request that changes the contract's code is measured on the old deployment and shows no change. To measure each commit's own code, build and deploy it in the workflow first and write the fixture against that deployment: see [Measure each commit's contract code](#measure-each-commits-contract-code). The workflow below suits a committed fixture.
 
 ```yaml
 name: Budget Gate
@@ -40,6 +42,7 @@ jobs:
 - **Core binary:** `binary-version` downloads the runner's binary from that core release (`budget-core-<os>-<arch>`, for example `budget-core-linux-amd64` or `budget-core-windows-arm64.exe`), checks it against the release's `SHA256SUMS`, and caches it. Core releases after v0.2.1 include Linux, macOS and Windows on x64 and arm64; v0.2.1 and earlier only include Linux x64, so on other runners those versions fail with a message saying so. On any other runner, build core yourself and pass `binary-path`.
 - **Baseline:** run the workflow on pushes to the default branch as well as on pull requests. Each default-branch push saves the measured snapshot to the Actions cache, and pull requests compare against it. A file at `baseline-path` is used instead when it exists. With neither, every function is reported as new and the comment says no baseline was found.
 - **History for the dashboard (optional):** set `history-branch: budgetgate-history` and grant `contents: write`. Each default-branch push then appends its snapshot to `history.json` on that branch, creating the branch (with no shared history) on the first run and keeping the last 200 snapshots. Point the [dashboard](https://budgetgate-dashboard.vercel.app/) at `https://raw.githubusercontent.com/<owner>/<repo>/budgetgate-history/history.json`. Public repositories only: the dashboard reads the file without a token. A failure to write the history is a warning, not a failed step.
+- **Measure each commit's contract code:**<a id="measure-each-commits-contract-code"></a> copy [`examples/build-fixture.sh`](examples/build-fixture.sh) to `budget/build-fixture.sh`, set `WASM` and `CALLS` in it, pin your Rust toolchain in `rust-toolchain.toml` (`targets = ["wasm32v1-none"]`), and use [`examples/measure-contract-code.yml`](examples/measure-contract-code.yml). Each run builds the contract, deploys it to testnet with a throwaway friendbot-funded key (no secrets), writes the fixture against that deployment, then runs Budget Gate, so a change to the code shows up in the report. Pinning the toolchain matters: a different Rust version compiles different wasm and changes the measured cost slightly. The CLI install, build and deploy add about a minute (56–63 s in the test repo, without a build cache).
 - **PR comment:** one comment per pull request, updated on every run. When core cannot compare (for example, the RPC is down), the comment says the latest run failed and links the workflow run. Commenting needs `pull-requests: write`.
 
 ## Inputs
@@ -63,7 +66,7 @@ jobs:
 
 ## Examples
 
-[`examples/`](examples/) has a single-contract workflow and a monorepo workflow that only runs when contract code changes.
+[`examples/`](examples/) has a workflow that builds, deploys and measures each commit's contract code (`measure-contract-code.yml` with `build-fixture.sh`), a single-contract workflow with a committed fixture, and a monorepo workflow that only runs when contract code changes.
 
 ## Development
 
