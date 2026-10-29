@@ -19,7 +19,7 @@ jobs:
 
       # The fixture calls your contract as deployed on the network; regenerate it after redeploying.
       - name: Run Budget Gate
-        uses: BudgetGate/soroban-budget-action@v0.2.0
+        uses: BudgetGate/soroban-budget-action@v0.2.1
         with:
           fixture-path: 'tests/fixture.json'
           rpc-url: 'https://soroban-testnet.stellar.org'
