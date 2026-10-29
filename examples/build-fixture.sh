@@ -62,13 +62,40 @@ id_of() {
   return 1
 }
 
+# A call from one contract into another costs slightly more or less depending on which of the
+# two contract IDs sorts first (in the test repository 558,474 or 559,224 CPU instructions for the
+# same code), and the throwaway key gives new IDs every run. So each contract is deployed with a
+# salt that puts its ID in its own slice of the ID range, in CONTRACTS order, and the order (and
+# the cost) is the same on every run.
+B32=ABCDEFGHIJKLMNOPQRSTUVWXYZ234567
+# The first 7 bits of the contract hash in a contract strkey, 0-127: the second character holds
+# 3 version bits (0) and the top 2 bits, the third character the next 5.
+id_prefix() {
+  local high="${B32%%"${1:1:1}"*}" low="${B32%%"${1:2:1}"*}"
+  echo $(( ${#high} * 32 + ${#low} ))
+}
+
+# Prints a salt whose contract ID falls in slice $1 of $2. Computing an ID is local and fast.
+salt_for_slice() {
+  local salt id
+  while :; do
+    salt="$(od -An -tx1 -N32 /dev/urandom | tr -d ' \n')"
+    id="$(stellar contract id wasm --salt "$salt" --source-account "$key" --network "$network")"
+    if (( $(id_prefix "$id") * $2 / 128 == $1 )); then
+      printf '%s' "$salt"
+      return 0
+    fi
+  done
+}
+
 retry stellar keys generate "$key" --network "$network" --fund --overwrite
 address="$(stellar keys address "$key")"
 stellar contract build
 
-for contract in "${CONTRACTS[@]}"; do
-  read -r -a words <<< "$(fill "$contract")"
-  id="$(retry stellar contract deploy --wasm "${words[1]}" --source "$key" --network "$network" -- "${words[@]:2}")"
+for i in "${!CONTRACTS[@]}"; do
+  read -r -a words <<< "$(fill "${CONTRACTS[$i]}")"
+  salt="$(salt_for_slice "$i" "${#CONTRACTS[@]}")"
+  id="$(retry stellar contract deploy --wasm "${words[1]}" --salt "$salt" --source "$key" --network "$network" -- "${words[@]:2}")"
   names+=("${words[0]}")
   ids+=("$id")
   echo "Deployed this commit's ${words[0]}: $id" >&2
