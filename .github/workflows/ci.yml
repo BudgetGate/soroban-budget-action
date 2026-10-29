@@ -20,22 +20,23 @@ jobs:
     - run: npm ci
     - run: npm run build --if-present
 
-    # action.yml runs the committed dist/index.js, so it must be the build of the committed src/.
+    # action.yml runs the committed dist/, so it must be the build of the committed src/.
+    # git status, not git diff, so a new or deleted output file (such as an ncc chunk) also fails.
     - name: Check dist/ is up to date
       id: dist
       run: |
-        if ! git diff --quiet -- dist; then
+        if [ -n "$(git status --porcelain -- dist)" ]; then
           echo "::error::dist/ does not match a fresh build of src/. Run 'npm run build' and commit dist/, or download the 'dist' artifact of this run and commit it."
-          git diff --stat -- dist
+          git status --short -- dist
           exit 1
         fi
 
-    # A build on Windows can differ from this Linux build, so offer the exact file CI expects.
+    # A build on Windows can differ from this Linux build, so offer the exact files CI expects.
     - name: Upload the fresh build of dist/
       if: failure() && steps.dist.outcome == 'failure'
       uses: actions/upload-artifact@v7
       with:
         name: dist
-        path: dist/index.js
+        path: dist/
 
     - run: npm test
