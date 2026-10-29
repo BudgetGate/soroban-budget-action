@@ -47,7 +47,8 @@ Last updated: 2026-10-29
 - A23 (2026-10-29, open PR): `binary-version` picks the runner's core binary on Linux, macOS and Windows (x64, arm64), reads `SHA256SUMS` first so an older core release fails with a clear message, and skips `chmod` on Windows; 50 tests. It needs a core release built by core C20's workflow before it can run for real.
 - A23 verified (2026-10-29): with core v0.2.2, test repo PR #8 (run 40875361973) downloaded and checksum-matched the right binary on `ubuntu-latest`, `ubuntu-24.04-arm`, `macos-26-intel`, `macos-latest`, `windows-latest` and `windows-11-arm`, and each measured the counter (CPU 291,573).
 - A24 (found in that run): both Windows runners compared against an empty baseline, because the Linux-saved cache entry never matched on Windows (`windows-only` cache version, backslash path). Fixed with a fixed `/` path and `enableCrossOsArchive`; the same PR #8 (run 40875749663) then restored `budgetgate-baseline-5fbacd3…` on all six runners. 51 tests.
-- Next up: Action release with A23 and A24 (only when the maintainer asks), with a docs PR for the new platforms.
+- `v0.2.2` released 2026-10-29 (maintainer's request): version bump #42, `main` CI green, exact tag `v0.2.2` on `9ca2978` with a GitHub release (A23, A24). Test repo PR #8 ran `@v0.2.2` (run 40877811065) with the counter v2 fixture on `ubuntu-latest`, `ubuntu-24.04-arm`, `macos-26-intel`, `macos-latest`, `windows-latest` and `windows-11-arm`: each resolved the tag to `9ca2978`, downloaded and checksum-matched its own core v0.2.2 binary, restored the Linux-saved baseline `5fbacd3…` and reported the regression (CPU 291,573 → 449,005), failing the step as intended. README and examples pin `@v0.2.2` with core `0.2.2`.
+- Next up: no open defects. A new release only when the maintainer asks.
 
 ## Blocked on core
 

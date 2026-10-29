@@ -19,7 +19,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Run Budget Gate
-        uses: BudgetGate/soroban-budget-action@v0.2.1
+        uses: BudgetGate/soroban-budget-action@v0.2.2
         with:
           fixture-path: 'contracts/fixtures/budget.json'
-          binary-version: '0.2.1'
+          binary-version: '0.2.2'

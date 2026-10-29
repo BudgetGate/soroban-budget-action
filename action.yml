@@ -24,7 +24,7 @@ inputs:
     description: 'Path to a budget-core binary (defaults to ./budget-core); wins over binary-version'
     required: false
   binary-version:
-    description: 'soroban-budget-core release to download, e.g. 0.2.1; picks the runner''s binary (Linux, macOS or Windows, x64 or arm64; core v0.2.1 and earlier only ship Linux x64) and checks it against the release SHA256SUMS'
+    description: 'soroban-budget-core release to download, e.g. 0.2.2; picks the runner''s binary (Linux, macOS or Windows, x64 or arm64; core v0.2.1 and earlier only ship Linux x64) and checks it against the release SHA256SUMS'
     required: false
   history-branch:
     description: 'Branch to keep history.json on (e.g. budgetgate-history). Each default-branch push appends its snapshot; needs contents: write. Off when empty'
