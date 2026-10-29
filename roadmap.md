@@ -21,7 +21,7 @@ Last updated: 2026-10-29
 - A16 done: README and `examples/*.yml` use `actions/checkout@v7` (current major, node24 runtime); the docs site's setup page matches (`BudgetGate/docs` PR).
 - A12 done: `DOCUMENTATION.md` (mostly invented behaviour), `PR_BODY.md` and `pr_body_action.md` removed; the README links to the docs site.
 - A17 done: `website/` removed. It was an undeployed Vite site whose pages repeated `DOCUMENTATION.md`'s invented claims (debug env var, memory, `@v1`); the docs site is the only docs site.
-- A18 done: `CONTRIBUTING.md` rewritten for this repo (Node 20, `npm ci`/`test`/`build`, committing `dist/` with `git add -f`, CI's `dist` artifact, the Action's rules).
+- A18 done: `CONTRIBUTING.md` rewritten for this repo (Node 20 at the time, now Node 24 since A11; `npm ci`/`test`/`build`, committing `dist/` (`git add -f` then, `git add dist` since A22), CI's `dist` artifact, the Action's rules).
 - A11 done: `runs.using: node24`, CI on Node 24. GitHub made Node 24 the runner default on 2026-06-16 (forcing `node20` actions onto it with an annotation) and removed Node 20 on 2026-09-23.
 - Found while doing A11: CI's own action pins (`checkout`, `setup-node`, `upload-artifact` at `@v4`) target Node 20 and are forced onto Node 24 with a warning (A19).
 - A19 done: `ci.yml` uses `actions/checkout@v7`, `setup-node@v7` and `upload-artifact@v7` (all `node24`), so CI no longer warns about Node 20.

@@ -1,6 +1,6 @@
 # CLAUDE.md — soroban-budget-action
 
-Scope: this repo only. If the workspace-level `CLAUDE.md` exists in the parent folder, read it as well. Where the two differ, this file wins for this repo. The defect table below was checked against `origin/main` (`c03f4c2`) on 2026-10-26. Re-verify an item before relying on it.
+Scope: this repo only. If the workspace-level `CLAUDE.md` exists in the parent folder, read it as well. Where the two differ, this file wins for this repo. The defect table below was checked against `origin/main` (`7efaa4b`) on 2026-10-29. Re-verify an item before relying on it.
 
 ## 1. What this repo is
 
@@ -13,11 +13,11 @@ Boundaries:
 - Network access limited to the GitHub API and downloading the core binary.
 - No SDK calls to Soroban RPC from this repo.
 
-User docs live in the separate `BudgetGate/docs` site (budgetgate.github.io/docs/), which describes this repo as of `c03f4c2`, including the limitations in section 3. A PR here that changes inputs, outputs, the comment or failure behaviour needs a matching docs PR, linked from both descriptions.
+User docs live in the separate `BudgetGate/docs` site (budgetgate.github.io/docs/), which describes this repo as of `7efaa4b` (v0.2.1), including its limitations. A PR here that changes inputs, outputs, the comment or failure behaviour needs a matching docs PR, linked from both descriptions.
 
 ## 2. Known layout
 
-State of `main` (`c03f4c2`) on 2026-10-26. `package.json` name `soroban-budget-action`, version `0.2.1` (was `1.0.0` on 2026-10-26; `0.2.0` for the v0.2.0 release).
+Layout last checked in full against `main` `c03f4c2` on 2026-10-26; later PRs (through #37, `7efaa4b`, 2026-10-29) updated the rows they changed. `package.json` name `soroban-budget-action`, version `0.2.1` (was `1.0.0` on 2026-10-26; `0.2.0` for the v0.2.0 release).
 
 | Item | Detail (read in full unless stated) |
 |------|--------|
@@ -35,7 +35,7 @@ State of `main` (`c03f4c2`) on 2026-10-26. `package.json` name `soroban-budget-a
 
 ## 3. Known defects
 
-Checked 2026-10-26 against `origin/main` (`c03f4c2`).
+Checked 2026-10-29 against `origin/main` (`7efaa4b`): no open defects; `npm audit --omit=dev` 0.
 
 | ID | Defect | Evidence |
 |----|--------|----------|
@@ -63,7 +63,7 @@ npm ci
 npm test            # jest
 npm run build       # ncc build, writes dist/
 ```
-After any change under `src/`, run the build and commit the updated `dist/` in the same PR. A stale `dist/` means runners execute old code. Run on 2026-10-27 (Windows) after A5: `npm test` 21 of 21 pass (tests mock `@actions/cache` and run in a temp directory each), and `dist/` was rebuilt from `src/` and committed. Stage it with `git add dist` (A22: `dist/` is no longer gitignored, and ncc writes more than `index.js`; a file the build stops writing must be deleted too). Since `@actions/cache` 5.x is bundled, an ncc build on Windows orders modules differently from the Linux build CI does (same size, ~14,600 lines differ), so a Windows-built `dist/` fails the dist check. When that happens, CI uploads its own build as the `dist` artifact: `gh run download <run-id> -n dist -D dist` and commit those files. Tests that check paths build the expected value with `path.join`, so they pass on any OS.
+After any change under `src/`, run the build and commit the updated `dist/` in the same PR. A stale `dist/` means runners execute old code. Run on 2026-10-29 on `7efaa4b` (Linux, Node 22): `npm test` 38 of 38 pass (each test runs in its own temp directory); CI's dist check passed on the same commit. Stage it with `git add dist` (A22: `dist/` is no longer gitignored, and ncc writes more than `index.js`; a file the build stops writing must be deleted too). Since `@actions/cache` 5.x is bundled, an ncc build on Windows orders modules differently from the Linux build CI does (same size, ~14,600 lines differ), so a Windows-built `dist/` fails the dist check. When that happens, CI uploads its own build as the `dist` artifact: `gh run download <run-id> -n dist -D dist` and commit those files. Tests that check paths build the expected value with `path.join`, so they pass on any OS.
 
 ## 6. Rules
 
