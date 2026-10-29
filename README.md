@@ -1,3 +1,5 @@
+<p align="center"><img src=".github/avatar.png" width="120" alt="Budget Gate logo: a resource-cost gauge behind a gate bar"></p>
+
 # soroban-budget-action
 
 A GitHub Action that runs [soroban-budget-core](https://github.com/BudgetGate/soroban-budget-core) on your Soroban contract calls, comments the cost report on the pull request, and fails the check when a function's cost regresses.
