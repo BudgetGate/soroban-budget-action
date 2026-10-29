@@ -83,17 +83,37 @@ id_prefix() {
   echo $(( ${#high} * 32 + ${#low} ))
 }
 
-# Prints a salt whose contract ID falls in slice $1 of $2. Computing an ID is local and fast.
+# Prints a salt whose contract ID falls in slice $1 of $2, then that ID. Computing an ID is
+# local and fast.
 salt_for_slice() {
   local salt id
   while :; do
     salt="$(od -An -tx1 -N32 /dev/urandom | tr -d ' \n')"
     id="$(stellar contract id wasm --salt "$salt" --source-account "$key" --network "$network")"
     if (( $(id_prefix "$id") * $2 / 128 == $1 )); then
-      printf '%s' "$salt"
+      printf '%s %s' "$salt" "$id"
       return 0
     fi
   done
+}
+
+# Deploys wasm $1 with salt $2, which gives contract ID $3, passing the rest to the constructor.
+# A deploy can time out after the network created the contract; retrying the same salt would
+# then fail, so a failed attempt first checks whether the contract exists. Deployment and
+# constructor are one transaction, so an existing contract has run its constructor.
+deploy() {
+  local wasm="$1" salt="$2" id="$3" attempt
+  shift 3
+  for attempt in 1 2 3; do
+    stellar contract deploy --wasm "$wasm" --salt "$salt" --source "$key" --network "$network" -- "$@" >/dev/null && return 0
+    if stellar contract fetch --id "$id" --network "$network" --out-file /dev/null 2>/dev/null; then
+      echo "Contract $id exists; an earlier attempt created it." >&2
+      return 0
+    fi
+    echo "Attempt $attempt of deploying $wasm failed." >&2
+    [ "$attempt" -lt 3 ] && sleep 15
+  done
+  return 1
 }
 
 retry stellar keys generate "$key" --network "$network" --fund --overwrite
@@ -108,8 +128,8 @@ stellar contract build
 
 for i in "${!CONTRACTS[@]}"; do
   read -r -a words <<< "$(fill "${CONTRACTS[$i]}")"
-  salt="$(salt_for_slice "$i" "${#CONTRACTS[@]}")"
-  id="$(retry stellar contract deploy --wasm "${words[1]}" --salt "$salt" --source "$key" --network "$network" -- "${words[@]:2}")"
+  read -r salt id <<< "$(salt_for_slice "$i" "${#CONTRACTS[@]}")"
+  deploy "${words[1]}" "$salt" "$id" "${words[@]:2}"
   names+=("${words[0]}")
   ids+=("$id")
   echo "Deployed this commit's ${words[0]}: $id" >&2
