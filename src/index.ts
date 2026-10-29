@@ -116,7 +116,8 @@ async function upsertReportComment(token: string, body: string): Promise<void> {
     issue_number: pr.number,
   };
   const comments = await octokit.paginate(octokit.rest.issues.listComments, { ...issue, per_page: 100 });
-  const existing = comments.find((c) => c.body?.includes(COMMENT_MARKER));
+  // Typed by hand: ncc's TypeScript 5.9 build no longer infers paginate's element type.
+  const existing = comments.find((c: { id: number; body?: string | null }) => c.body?.includes(COMMENT_MARKER));
   if (existing) {
     await octokit.rest.issues.updateComment({ owner: issue.owner, repo: issue.repo, comment_id: existing.id, body });
     core.info(`Updated PR comment ${existing.id}.`);
