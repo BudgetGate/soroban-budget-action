@@ -22,6 +22,7 @@ CONTRACTS=(
 CALLS=(
   "increment my_contract increment"
   # "transfer token transfer --from {ADDRESS} --to {ADDRESS} --amount 10"
+  # "set_memo token set_memo --memo 'paid in full'"
   # "transfer_from_alice token transfer --from {alice} --to {ADDRESS} --amount 10"
 )
 # Extra accounts, one name per line, for calls that need authorization from an account other
@@ -32,7 +33,9 @@ ACCOUNTS=(
   # "alice"
 )
 # In all three lists, {ADDRESS} is replaced with the funded key's address, {name} with the
-# address of the account or the ID of the contract with that name. Arguments are split on spaces.
+# address of the account or the ID of the contract with that name. Lines are split into words as
+# a shell would, without running anything: quote an argument that contains spaces, such as text
+# or JSON ('Budget Gate', '[1, 2, 3]').
 OUT=budget/fixture.json
 
 network=testnet
@@ -59,6 +62,17 @@ fill() {
     text="${text//\{${names[$i]}\}/${ids[$i]}}"
   done
   printf '%s' "$text"
+}
+
+# Splits $1 into the array `words`, honouring '...' and "..." quotes (xargs parses them; nothing
+# is run). An unmatched quote stops the script.
+split_words() {
+  local list word
+  list="$(printf '%s' "$1" | xargs printf '%s\n')" || { echo "Cannot split into words: $1" >&2; return 1; }
+  words=()
+  while IFS= read -r word; do
+    words+=("$word")
+  done <<< "$list"
 }
 
 id_of() {
@@ -127,7 +141,7 @@ done
 stellar contract build
 
 for i in "${!CONTRACTS[@]}"; do
-  read -r -a words <<< "$(fill "${CONTRACTS[$i]}")"
+  split_words "$(fill "${CONTRACTS[$i]}")"
   read -r salt id <<< "$(salt_for_slice "$i" "${#CONTRACTS[@]}")"
   deploy "${words[1]}" "$salt" "$id" "${words[@]:2}"
   names+=("${words[0]}")
@@ -142,7 +156,7 @@ done
 entries=()
 reported=" "
 for call in "${CALLS[@]}"; do
-  read -r -a words <<< "$(fill "$call")"
+  split_words "$(fill "$call")"
   name="${words[0]}"
   case "$reported" in
     *" $name "*) echo "Two calls in CALLS are named '$name'; give each a unique name." >&2; exit 1 ;;
