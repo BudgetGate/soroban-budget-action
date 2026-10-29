@@ -16,9 +16,21 @@ export const COMMENT_MARKER = '<!-- budgetgate-report -->';
 export const BASELINE_CACHE_PATH = path.join('.budgetgate', 'baseline.json');
 export const BASELINE_CACHE_PREFIX = 'budgetgate-baseline-';
 
-// Core releases publish one binary and a checksum file for it (core's release.yml).
-export const CORE_ASSET = 'budget-core-linux-amd64';
+// Core releases publish one binary per platform and a SHA256SUMS file covering them (core's
+// release.yml). Releases up to v0.2.1 only include budget-core-linux-amd64.
+const CORE_OS: Record<string, string> = { linux: 'linux', darwin: 'darwin', win32: 'windows' };
+const CORE_ARCH: Record<string, string> = { x64: 'amd64', arm64: 'arm64' };
 const CORE_RELEASES = 'https://github.com/BudgetGate/soroban-budget-core/releases/download';
+
+// coreAsset names the core release binary for a runner's os.platform() and os.arch().
+export function coreAsset(platform: string, arch: string): string {
+  const goos = CORE_OS[platform];
+  const goarch = CORE_ARCH[arch];
+  if (!goos || !goarch) {
+    throw new Error(`binary-version has no core binary for ${platform}/${arch}: releases cover Linux, macOS and Windows on x64 and arm64. Build core and pass binary-path instead.`);
+  }
+  return `budget-core-${goos}-${goarch}${goos === 'windows' ? '.exe' : ''}`;
+}
 
 // verifyChecksum checks a downloaded file against its line in a SHA256SUMS file
 // (`<sha256>  <name>` per line, as written by sha256sum).
@@ -198,22 +210,26 @@ export async function run(): Promise<void> {
 
     // Download binary if version is specified
     if (binaryVersion && !binaryPath) {
-      if (os.platform() !== 'linux' || os.arch() !== 'x64') {
-        throw new Error(`binary-version needs a Linux x64 runner: core releases only include ${CORE_ASSET}. Build core and pass binary-path instead.`);
-      }
-      core.info(`Downloading soroban-budget-core v${binaryVersion}...`);
+      const asset = coreAsset(os.platform(), os.arch());
+      core.info(`Downloading soroban-budget-core v${binaryVersion} (${asset})...`);
       const release = `${CORE_RELEASES}/v${binaryVersion}`;
-      const downloadPath = await tc.downloadTool(`${release}/${CORE_ASSET}`);
-      const sumsPath = await tc.downloadTool(`${release}/SHA256SUMS`);
-      verifyChecksum(downloadPath, fs.readFileSync(sumsPath, 'utf8'), CORE_ASSET);
-      core.info(`Checksum of ${CORE_ASSET} matches the release's SHA256SUMS.`);
+      // SHA256SUMS lists every binary in the release, so an older release without this platform's
+      // binary fails here with a clear message instead of a 404.
+      const sums = fs.readFileSync(await tc.downloadTool(`${release}/SHA256SUMS`), 'utf8');
+      if (!sums.split('\n').some((line) => line.trim().split(/\s+/)[1] === asset)) {
+        throw new Error(`soroban-budget-core v${binaryVersion} has no ${asset}: releases up to v0.2.1 only include budget-core-linux-amd64. Use a newer binary-version, a Linux x64 runner, or binary-path.`);
+      }
+      const downloadPath = await tc.downloadTool(`${release}/${asset}`);
+      verifyChecksum(downloadPath, sums, asset);
+      core.info(`Checksum of ${asset} matches the release's SHA256SUMS.`);
 
-      // Cache the tool
-      const cachedPath = await tc.cacheFile(downloadPath, 'budget-core', 'soroban-budget-core', binaryVersion);
-      binaryPath = path.join(cachedPath, 'budget-core');
+      const binaryName = asset.endsWith('.exe') ? 'budget-core.exe' : 'budget-core';
+      const cachedPath = await tc.cacheFile(downloadPath, binaryName, 'soroban-budget-core', binaryVersion);
+      binaryPath = path.join(cachedPath, binaryName);
 
-      // Make it executable
-      await exec.exec('chmod', ['+x', binaryPath]);
+      if (os.platform() !== 'win32') {
+        await exec.exec('chmod', ['+x', binaryPath]);
+      }
     } else if (!binaryPath) {
       binaryPath = './budget-core';
     }
