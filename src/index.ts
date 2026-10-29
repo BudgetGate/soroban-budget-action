@@ -12,8 +12,12 @@ import * as path from 'path';
 export const COMMENT_MARKER = '<!-- budgetgate-report -->';
 
 // The Actions cache matches entries by their file paths as well as their key, so the baseline is
-// always saved and restored at this one path.
-export const BASELINE_CACHE_PATH = path.join('.budgetgate', 'baseline.json');
+// always saved and restored at this one path. It uses '/' on every OS (Node and core accept it on
+// Windows) so a baseline saved on a Linux runner matches on Windows.
+export const BASELINE_CACHE_PATH = '.budgetgate/baseline.json';
+// Without this, @actions/cache marks entries made on Windows as Windows-only and Windows runners
+// never restore entries saved elsewhere. It changes nothing on Linux and macOS.
+const CROSS_OS_CACHE = true;
 export const BASELINE_CACHE_PREFIX = 'budgetgate-baseline-';
 
 // Core releases publish one binary per platform and a SHA256SUMS file covering them (core's
@@ -65,7 +69,7 @@ async function resolveBaseline(baselinePath: string): Promise<Baseline> {
   const pr = github.context.payload.pull_request;
   const baseSha: string = pr?.base?.sha ?? github.context.payload.before ?? '';
   try {
-    const key = await cache.restoreCache([BASELINE_CACHE_PATH], `${BASELINE_CACHE_PREFIX}${baseSha}`, [BASELINE_CACHE_PREFIX]);
+    const key = await cache.restoreCache([BASELINE_CACHE_PATH], `${BASELINE_CACHE_PREFIX}${baseSha}`, [BASELINE_CACHE_PREFIX], undefined, CROSS_OS_CACHE);
     if (key) {
       core.info(`Restored baseline from cache entry ${key}.`);
       return { path: BASELINE_CACHE_PATH };
@@ -91,7 +95,7 @@ async function saveBaseline(snapshotPath: string): Promise<void> {
       fs.copyFileSync(snapshotPath, BASELINE_CACHE_PATH);
     }
     const key = `${BASELINE_CACHE_PREFIX}${github.context.sha}`;
-    const cacheId = await cache.saveCache([BASELINE_CACHE_PATH], key);
+    const cacheId = await cache.saveCache([BASELINE_CACHE_PATH], key, undefined, CROSS_OS_CACHE);
     core.info(`Saved baseline to cache entry ${key} (id ${cacheId}).`);
   } catch (e) {
     core.warning(`Failed to save baseline cache: ${e}`);

@@ -616,6 +616,10 @@ old report` }]);
       expect(mockRestoreCache).not.toHaveBeenCalled();
     });
 
+    it('caches the baseline at a path with forward slashes, so Linux and Windows runners share it', () => {
+      expect(BASELINE_CACHE_PATH).toBe('.budgetgate/baseline.json');
+    });
+
     it('restores the cached baseline for the PR base commit when there is no file', async () => {
       mockGetInput.mockImplementation(inputs());
       mockRestoreCache.mockResolvedValue(`${BASELINE_CACHE_PREFIX}basesha`);
@@ -623,7 +627,7 @@ old report` }]);
 
       await run();
 
-      expect(mockRestoreCache).toHaveBeenCalledWith([BASELINE_CACHE_PATH], `${BASELINE_CACHE_PREFIX}basesha`, [BASELINE_CACHE_PREFIX]);
+      expect(mockRestoreCache).toHaveBeenCalledWith([BASELINE_CACHE_PATH], `${BASELINE_CACHE_PREFIX}basesha`, [BASELINE_CACHE_PREFIX], undefined, true);
       expect(baselineArg()).toBe(BASELINE_CACHE_PATH);
       expect(mockCreateComment).toHaveBeenCalledWith(expect.objectContaining({ body: expect.not.stringContaining('No baseline found') }));
     });
@@ -678,7 +682,7 @@ old report` }]);
 
         await run();
 
-        expect(mockSaveCache).toHaveBeenCalledWith([BASELINE_CACHE_PATH], `${BASELINE_CACHE_PREFIX}headsha`);
+        expect(mockSaveCache).toHaveBeenCalledWith([BASELINE_CACHE_PATH], `${BASELINE_CACHE_PREFIX}headsha`, undefined, true);
         expect(fs.readFileSync(BASELINE_CACHE_PATH, 'utf8')).toContain('"name":"f"');
       });
 
@@ -689,7 +693,7 @@ old report` }]);
 
         await run();
 
-        expect(mockRestoreCache).toHaveBeenCalledWith([BASELINE_CACHE_PATH], `${BASELINE_CACHE_PREFIX}prevsha`, [BASELINE_CACHE_PREFIX]);
+        expect(mockRestoreCache).toHaveBeenCalledWith([BASELINE_CACHE_PATH], `${BASELINE_CACHE_PREFIX}prevsha`, [BASELINE_CACHE_PREFIX], undefined, true);
       });
 
       it('does not save on another branch', async () => {
