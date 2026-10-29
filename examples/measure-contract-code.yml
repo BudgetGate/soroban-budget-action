@@ -2,7 +2,7 @@ name: Budget Gate
 
 # Measures the contract code in each commit: build it, deploy it to testnet with a throwaway
 # friendbot-funded key, and write the fixture against that deployment, then compare. Copy
-# build-fixture.sh to budget/build-fixture.sh, set WASM and CALLS in it, and pin your Rust
+# build-fixture.sh to budget/build-fixture.sh, set CONTRACTS and CALLS in it, and pin your Rust
 # toolchain in rust-toolchain.toml (with targets = ["wasm32v1-none"]) so every run compiles
 # the same wasm.
 on:
@@ -21,9 +21,19 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # Reuse downloaded crates and compiled dependencies. A fresh checkout makes the contracts'
+      # own sources newer than the cache, so cargo rebuilds them every run.
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: contracts-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
+
       - uses: stellar/stellar-cli@v28.1.0
 
-      - name: Deploy this commit's contract and write the fixture
+      - name: Deploy this commit's contracts and write the fixture
         run: budget/build-fixture.sh
 
       - name: Run Budget Gate
