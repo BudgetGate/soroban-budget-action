@@ -43,6 +43,10 @@ constructor_args=("${CONSTRUCTOR_ARGS[@]//\{ADDRESS\}/$address}")
 id="$(retry stellar contract deploy --wasm "$WASM" --source "$key" --network "$network" -- "${constructor_args[@]}")"
 echo "Deployed this commit's contract: $id" >&2
 
+# Fixture calls are simulated, not submitted, so they all see the storage the contract has right
+# after deployment. To measure with state in place, submit setup calls here, for example:
+# retry stellar contract invoke --id "$id" --source "$key" --network "$network" -- init --admin "$address"
+
 entries=()
 for call in "${CALLS[@]}"; do
   call="${call//\{ADDRESS\}/$address}"
