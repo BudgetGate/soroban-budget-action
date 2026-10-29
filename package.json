@@ -1,6 +1,6 @@
 {
   "name": "soroban-budget-action",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "GitHub Action that runs soroban-budget-core on pull requests and comments with Soroban resource-cost regressions.",
   "main": "dist/index.js",
   "scripts": {

@@ -17,7 +17,7 @@ User docs live in the separate `BudgetGate/docs` site (budgetgate.github.io/docs
 
 ## 2. Known layout
 
-State of `main` (`c03f4c2`) on 2026-10-26. `package.json` name `soroban-budget-action`, version `1.0.0`.
+State of `main` (`c03f4c2`) on 2026-10-26. `package.json` name `soroban-budget-action`, version `0.2.1` (was `1.0.0` on 2026-10-26; `0.2.0` for the v0.2.0 release).
 
 | Item | Detail (read in full unless stated) |
 |------|--------|
@@ -51,7 +51,8 @@ Resolved and removed: A20 (found 2026-10-28): `SECURITY.md` sent reports to `sec
 Core's real measurement has landed (core #9, #8; verified on testnet), so the Action can be run against real numbers today by building core from source and passing `binary-path` (the docs site's setup page does this). Core exits 0 pass / 1 regression / 2 error (core #15), and the Action uses that (A8 fixed). Core v0.2.0 is released; `binary-version: 0.2.0` downloads and checks it.
 
 1. Done 2026-10-28: run end to end in `BudgetGate/budgetgate-action-test` (push run and PRs #1–#3, recorded in #25 and #26), and A3: release `v0.2.0`, an exact tag (no moving `v0`).
-2. Next releases: a new exact tag (`v0.2.1`, `v0.3.0`, …) only when the maintainer asks, after `main` CI is green; bump `package.json` to match first. Never move or force-push a tag.
+2. `v0.2.1` (2026-10-29, maintainer's request): A21, A22 and core `0.2.1` in the examples; `package.json` bumped first, then an exact tag.
+3. Next releases: a new exact tag (`v0.2.2`, `v0.3.0`, …) only when the maintainer asks, after `main` CI is green; bump `package.json` to match first. Never move or force-push a tag.
 
 `roadmap.md` tracks progress against this list.
 
