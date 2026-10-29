@@ -2,14 +2,15 @@ name: Audit
 
 # Checks dependencies for known vulnerabilities every week, so a new advisory shows up as a failed
 # run. Fails on any vulnerability in the bundled runtime dependencies, and on moderate or worse in
-# the development ones. Not a required check: a new advisory does not block unrelated pull requests.
+# the development ones. Also runs on every pull request, so one that adds or updates a vulnerable
+# dependency shows it before merging. Not a required check: an advisory published for an unchanged
+# dependency would otherwise block unrelated pull requests until it is fixed.
 on:
   schedule:
     - cron: "23 6 * * 1"
   workflow_dispatch:
   pull_request:
     branches: [ "main" ]
-    paths: [ ".github/workflows/audit.yml" ]
 
 permissions:
   contents: read
