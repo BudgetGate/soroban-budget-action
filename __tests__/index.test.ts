@@ -11,7 +11,8 @@ import { run, verifyChecksum, COMMENT_MARKER, BASELINE_CACHE_PATH, BASELINE_CACH
 
 jest.mock('@actions/cache');
 jest.mock('@actions/core');
-jest.mock('@actions/github');
+// A factory, not an automock: automocking loads the real module, and @actions/github 8 pulls in ESM-only @octokit packages that Jest does not transform.
+jest.mock('@actions/github', () => ({ __esModule: true, getOctokit: jest.fn(), context: {} }));
 jest.mock('@actions/exec');
 jest.mock('@actions/tool-cache');
 // Only platform and arch are replaced, so tests can pick the runner the Action sees.

@@ -2,7 +2,7 @@
 
 Progress tracker for this repo. The defect IDs (A1, A2, …) and their evidence are in `CLAUDE.md` section 3; the order comes from `CLAUDE.md` section 4. Tick a box only when the change is merged to `main`.
 
-Last updated: 2026-10-28
+Last updated: 2026-10-29
 
 ## Where I left off
 
@@ -38,7 +38,9 @@ Last updated: 2026-10-28
   - PRs #1 and #2 are closed with the results. PR #3 moves the test repo's workflow from the deleted `@feat/snapshot-history` to `@main`; it is the maintainer's to merge.
 - A3 done (2026-10-28, maintainer's request): `package.json` bumped to `0.2.0`, then `v0.2.0` tagged on `main` as an exact tag (no moving `v0`: moving it would need a force-pushed tag) with a GitHub release. The README and examples already pin `@v0.2.0`.
 - `@v0.2.0` ran in a real workflow: test repo PR #4 (run 40736659402) resolved the tag to `467b83f`, downloaded core v0.2.0, matched `SHA256SUMS`, restored the cached baseline and posted "No regression". The test repo's workflow (its PR #4) and the docs site (docs #30) move to `@v0.2.0`.
-- Next up: no open defects. A new release only when the maintainer asks.
+- A21 (2026-10-29): runtime dependencies moved to the last CommonJS majors (`@actions/core` 2.0.3, `exec` 2.0.0, `tool-cache` 3.0.1, `github` 8.0.1); `npm audit --omit=dev` went from 12 issues (2 high) to 0. 38 tests pass (the `@actions/github` mock is now a factory). The built `dist/` was run locally against a fake GitHub API: it downloaded core v0.2.0, matched `SHA256SUMS`, compared core's counter v1/v2 snapshots (CPU 291,573 → 449,005, exit 1), created the marked comment, updated it on a second run and wrote `regression_detected=true`. Still to do: rerun the test repo on this `main`, and release `v0.2.1` only when the maintainer asks.
+- Found during A21: A22, `dist/835.index.js` is emitted by ncc but never committed (see `CLAUDE.md` section 3).
+- Next up: A22. A new release only when the maintainer asks.
 
 ## Blocked on core
 
@@ -62,6 +64,8 @@ Nothing left — core delivered all three, so no part of this repo's work order 
 - [x] A11: check whether `runs.using: node20` is still supported; move to the current runtime if not
 - [x] A19: move `ci.yml`'s `actions/*` pins to current majors (all three are `node20` at `@v4`)
 - [x] A20: `SECURITY.md` points to GitHub private vulnerability reporting instead of `security@budgetgate.io`, whose domain does not exist (found 2026-10-28)
+- [x] A21: runtime dependencies without known vulnerabilities (`npm audit --omit=dev` 0), staying on CommonJS majors
+- [ ] A22: commit every file ncc writes to `dist/`, and make CI's dist check and artifact cover the whole directory
 
 ## Phase 2: Baseline persistence and PR comment
 
