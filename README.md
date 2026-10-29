@@ -29,7 +29,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: BudgetGate/soroban-budget-action@v0.2.0
+      - uses: BudgetGate/soroban-budget-action@v0.2.1
         with:
           fixture-path: budget/fixture.json
           binary-version: 0.2.1
