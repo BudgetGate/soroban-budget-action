@@ -22,9 +22,17 @@ CONTRACTS=(
 CALLS=(
   "increment my_contract increment"
   # "transfer token transfer --from {ADDRESS} --to {ADDRESS} --amount 10"
+  # "transfer_from_alice token transfer --from {alice} --to {ADDRESS} --amount 10"
 )
-# In both lists, {ADDRESS} is replaced with the funded key's address and {name} with the ID of
-# the contract deployed under that name. Arguments are split on spaces.
+# Extra accounts, one name per line, for calls that need authorization from an account other
+# than the transaction's source. Each gets a throwaway key funded by friendbot. The account must
+# exist: simulating authorization by a missing account skips the signature check and reports far
+# less CPU than any real call.
+ACCOUNTS=(
+  # "alice"
+)
+# In all three lists, {ADDRESS} is replaced with the funded key's address, {name} with the
+# address of the account or the ID of the contract with that name. Arguments are split on spaces.
 OUT=budget/fixture.json
 
 network=testnet
@@ -90,6 +98,12 @@ salt_for_slice() {
 
 retry stellar keys generate "$key" --network "$network" --fund --overwrite
 address="$(stellar keys address "$key")"
+# ${ACCOUNTS[@]+...} expands to nothing for an empty list instead of failing under set -u.
+for account in ${ACCOUNTS[@]+"${ACCOUNTS[@]}"}; do
+  retry stellar keys generate "$key-$account" --network "$network" --fund --overwrite
+  names+=("$account")
+  ids+=("$(stellar keys address "$key-$account")")
+done
 stellar contract build
 
 for i in "${!CONTRACTS[@]}"; do
