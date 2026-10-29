@@ -73,7 +73,7 @@ npm test          # Jest; GitHub, core and the cache are mocked
 npm run build     # bundles src/ into dist/index.js, which action.yml runs
 ```
 
-Commit `dist/index.js` with every change under `src/`; CI fails when it differs from a fresh build.
+Commit all of `dist/` with every change under `src/`; CI fails when any file in it differs from a fresh build.
 
 ## Security
 

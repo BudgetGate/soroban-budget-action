@@ -41,7 +41,8 @@ Last updated: 2026-10-29
 - A21 (2026-10-29): runtime dependencies moved to the last CommonJS majors (`@actions/core` 2.0.3, `exec` 2.0.0, `tool-cache` 3.0.1, `github` 8.0.1); `npm audit --omit=dev` went from 12 issues (2 high) to 0. 38 tests pass (the `@actions/github` mock is now a factory). The built `dist/` was run locally against a fake GitHub API: it downloaded core v0.2.0, matched `SHA256SUMS`, compared core's counter v1/v2 snapshots (CPU 291,573 → 449,005, exit 1), created the marked comment, updated it on a second run and wrote `regression_detected=true`. Merged in #32 (`909e535`).
 - A21 ran on real GitHub (2026-10-29) in `budgetgate-action-test` PR #5, with the Action pinned to `909e535`: counter v2 (run 40845313063) restored the cached baseline `budgetgate-baseline-ed582a4…`, matched `SHA256SUMS`, measured CPU 291,573 → 449,005, write bytes 80 → 380, read entries 3 → 6, write entries 1 → 4 and posted comment `6492257961` (step failed as a regression); counter v1 (run 40845399693) updated the same comment and passed. Merging PR #5 (push run 40845644491 on `86a4a71`, green) saved the cache entry `budgetgate-baseline-86a4a71…` (443 B) and appended the snapshot to `history.json` on `budgetgate-history` (3 → 4 snapshots, read back). The test repo's workflow now pins `909e535`; move it to `@v0.2.1` when that is released (only when the maintainer asks).
 - Found during A21: A22, `dist/835.index.js` is emitted by ncc but never committed (see `CLAUDE.md` section 3).
-- Next up: A22. A new release only when the maintainer asks.
+- A22 (2026-10-29): `dist/` is no longer gitignored; `dist/835.index.js` (the `apache-arrow` chunk `index.js` requires) and `dist/licenses.txt` are committed; CI fails on any changed, new or deleted file in `dist/` (`git status --porcelain`, checked locally: the old `git diff --quiet` passed with both files missing, the new check listed them) and uploads all of `dist/`. `dist/index.js` is unchanged, so runtime behaviour is the same.
+- Next up: no open defects. `v0.2.1` (A21 and A22) only when the maintainer asks; then move the test repo off its `909e535` pin.
 
 ## Blocked on core
 
@@ -66,7 +67,7 @@ Nothing left — core delivered all three, so no part of this repo's work order 
 - [x] A19: move `ci.yml`'s `actions/*` pins to current majors (all three are `node20` at `@v4`)
 - [x] A20: `SECURITY.md` points to GitHub private vulnerability reporting instead of `security@budgetgate.io`, whose domain does not exist (found 2026-10-28)
 - [x] A21: runtime dependencies without known vulnerabilities (`npm audit --omit=dev` 0), staying on CommonJS majors
-- [ ] A22: commit every file ncc writes to `dist/`, and make CI's dist check and artifact cover the whole directory
+- [x] A22: commit every file ncc writes to `dist/`, and make CI's dist check and artifact cover the whole directory
 
 ## Phase 2: Baseline persistence and PR comment
 

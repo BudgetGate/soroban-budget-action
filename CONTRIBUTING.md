@@ -17,12 +17,12 @@ The Action runs `soroban-budget-core`, which lives in its own repository. To try
 
 ## `dist/` must match `src/`
 
-`action.yml` runs the committed `dist/index.js`, not `src/`. After any change under `src/`:
+`action.yml` runs the committed `dist/index.js`, not `src/`, and that file loads other files ncc writes next to it (a chunk such as `835.index.js`). After any change under `src/`:
 
 1. Run `npm run build`.
-2. Commit `dist/index.js` in the same PR. `dist` is in `.gitignore`, so stage it with `git add -f dist/index.js` (a plain `git add` prints a warning and exits 1).
+2. Commit all of `dist/` in the same PR (`git add dist`): `index.js`, any chunks, and `licenses.txt`, the licenses of the bundled packages. If a build stops writing a file, delete it too.
 
-CI rebuilds `dist/` and fails if it differs from the committed file. A build made on Windows can differ from CI's Linux build. When the check fails, the run uploads its own build as the `dist` artifact: download it with `gh run download <run-id> -n dist -D dist` and commit that file.
+CI rebuilds `dist/` and fails if any file in it is changed, added or missing compared with the commit. A build made on Windows can differ from CI's Linux build. When the check fails, the run uploads its own build as the `dist` artifact: download it with `gh run download <run-id> -n dist -D dist` and commit those files.
 
 ## Rules for changes
 

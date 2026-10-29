@@ -83,8 +83,8 @@ out
 
 # Nuxt.js build / generate output
 .nuxt
-dist
 .output
+# dist/ is not ignored: action.yml runs the committed ncc bundle, and every file ncc writes there is part of it.
 
 # Gatsby files
 .cache/
