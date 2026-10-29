@@ -82,7 +82,7 @@ Nothing left — core delivered all three, so no part of this repo's work order 
 
 ## Maintainer actions (Claude must not do these)
 
-- [ ] Branch protection on `main`: currently 0 required reviews and no required status checks. Consider requiring `Action CI / build-and-test`.
-- [ ] Repo topics and description.
+- [x] Branch protection on `main` (set by the maintainer 2026-10-29, read back through the API): the `build-and-test` check is required, branches need not be up to date, 0 reviews (single maintainer), no force-push or deletion.
+- [x] Repo topics and description (set by the maintainer 2026-10-29, read back through the API): `soroban`, `stellar`, `smart-contracts`, `github-actions`, `ci`, `typescript`; the description says early-stage and unaudited.
 - [x] Enable private vulnerability reporting (Settings → Security). `SECURITY.md` points to it (A20); enabled by the maintainer 2026-10-28 (API: `enabled: true`).
 - [x] Delete branches `docs/claude-md-and-roadmap` and `feature/complete-missing-specs` (deleted in the 2026-10-28 cleanup; `main` is the only branch).
