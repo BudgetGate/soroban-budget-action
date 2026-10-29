@@ -15,6 +15,9 @@ updates:
       # The next majors of @actions/* are ESM-only, which this CommonJS ncc build cannot load (A5, A21).
       - dependency-name: "@actions/*"
         update-types: [ "version-update:semver-major" ]
+      # ts-jest 29 supports TypeScript up to 6; move to 7 together with a ts-jest that supports it.
+      - dependency-name: typescript
+        update-types: [ "version-update:semver-major" ]
   - package-ecosystem: github-actions
     directory: /
     schedule:
