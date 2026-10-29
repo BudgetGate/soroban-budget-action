@@ -23,4 +23,4 @@ jobs:
         with:
           fixture-path: 'tests/fixture.json'
           rpc-url: 'https://soroban-testnet.stellar.org'
-          binary-version: '0.2.0'
+          binary-version: '0.2.1'

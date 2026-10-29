@@ -32,7 +32,7 @@ jobs:
       - uses: BudgetGate/soroban-budget-action@v0.2.0
         with:
           fixture-path: budget/fixture.json
-          binary-version: 0.2.0
+          binary-version: 0.2.1
 ```
 
 - **Core binary:** `binary-version` downloads `budget-core-linux-amd64` from that core release, checks it against the release's `SHA256SUMS`, and caches it. Core releases only include a Linux x86-64 binary, so this needs a Linux x64 runner. On other runners, build core yourself and pass `binary-path`.
@@ -49,7 +49,7 @@ jobs:
 | `rpc-url` | No | core's default (testnet) | Soroban RPC endpoint, used with `fixture-path`. If it contains an API key, pass it from a secret. |
 | `new-path` | No | `new.json` | An existing snapshot to compare, used when `fixture-path` is not set. |
 | `baseline-path` | No | `baseline.json` | Baseline snapshot file. When it does not exist, the cached baseline is used. |
-| `binary-version` | No | — | Core release to download, for example `0.2.0`. Linux x64 runners only. |
+| `binary-version` | No | — | Core release to download, for example `0.2.1`. Linux x64 runners only. |
 | `binary-path` | No | `./budget-core` | Path to a `budget-core` binary. Wins over `binary-version`. |
 | `history-branch` | No | — (off) | Branch that keeps `history.json` for the dashboard, e.g. `budgetgate-history`. Needs `contents: write`. |
 
