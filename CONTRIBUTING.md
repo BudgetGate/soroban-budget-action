@@ -17,7 +17,7 @@ The Action runs `soroban-budget-core`, which lives in its own repository. To try
 
 ## `dist/` must match `src/`
 
-`action.yml` runs the committed `dist/index.js`, not `src/`, and that file loads other files ncc writes next to it (a chunk such as `835.index.js`). After any change under `src/`:
+`action.yml` runs the committed `dist/index.js`, not `src/`, and that file loads other files ncc writes next to it (a chunk such as `835.index.js`). After any change under `src/`, or to a runtime dependency (Dependabot's runtime update PRs included):
 
 1. Run `npm run build`.
 2. Commit all of `dist/` in the same PR (`git add dist`): `index.js`, any chunks, and `licenses.txt`, the licenses of the bundled packages. If a build stops writing a file, delete it too.
