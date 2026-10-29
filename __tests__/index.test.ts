@@ -7,7 +7,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as crypto from 'crypto';
-import { run, verifyChecksum, COMMENT_MARKER, BASELINE_CACHE_PATH, BASELINE_CACHE_PREFIX, CORE_ASSET, HISTORY_FILE, HISTORY_LIMIT } from '../src/index';
+import { run, verifyChecksum, coreAsset, COMMENT_MARKER, BASELINE_CACHE_PATH, BASELINE_CACHE_PREFIX, HISTORY_FILE, HISTORY_LIMIT } from '../src/index';
 
 jest.mock('@actions/cache');
 jest.mock('@actions/core');
@@ -332,6 +332,7 @@ old report` }]);
   });
   describe('binary-version', () => {
     const RELEASE = 'https://github.com/BudgetGate/soroban-budget-core/releases/download/v1.2.3';
+    const CORE_ASSET = 'budget-core-linux-amd64';
     const sha256 = (data: string) => crypto.createHash('sha256').update(data).digest('hex');
 
     beforeEach(() => {
@@ -381,7 +382,7 @@ old report` }]);
 
     it.each([
       { name: 'the checksum differs', sums: `${'0'.repeat(64)}  ${CORE_ASSET}\n`, error: `Checksum mismatch for ${CORE_ASSET}` },
-      { name: 'SHA256SUMS has no entry for the binary', sums: `${sha256('binary bytes')}  other-file\n`, error: `SHA256SUMS has no entry for ${CORE_ASSET}` },
+      { name: 'SHA256SUMS has no entry for the binary', sums: `${sha256('binary bytes')}  other-file\n`, error: `soroban-budget-core v1.2.3 has no ${CORE_ASSET}` },
     ])('fails without caching or running the binary when $name', async ({ sums, error }) => {
       serveRelease(sums);
 
@@ -393,16 +394,69 @@ old report` }]);
     });
 
     it.each([
-      { platform: 'darwin', arch: 'x64' },
-      { platform: 'linux', arch: 'arm64' },
+      { platform: 'linux', arch: 'arm64', asset: 'budget-core-linux-arm64', binary: 'budget-core' },
+      { platform: 'darwin', arch: 'x64', asset: 'budget-core-darwin-amd64', binary: 'budget-core' },
+      { platform: 'darwin', arch: 'arm64', asset: 'budget-core-darwin-arm64', binary: 'budget-core' },
+      { platform: 'win32', arch: 'x64', asset: 'budget-core-windows-amd64.exe', binary: 'budget-core.exe' },
+      { platform: 'win32', arch: 'arm64', asset: 'budget-core-windows-arm64.exe', binary: 'budget-core.exe' },
+    ])('downloads $asset on $platform/$arch', async ({ platform, arch, asset, binary }) => {
+      (os.platform as jest.Mock).mockReturnValue(platform);
+      (os.arch as jest.Mock).mockReturnValue(arch);
+      serveRelease(`${sha256('other bytes')}  ${CORE_ASSET}\n${sha256('binary bytes')}  ${asset}\n`);
+
+      await run();
+
+      expect(mockDownloadTool).toHaveBeenCalledWith(`${RELEASE}/${asset}`);
+      expect(mockCacheFile).toHaveBeenCalledWith('downloaded-binary', binary, 'soroban-budget-core', '1.2.3');
+      const cachedBinary = path.join('/tmp/cached', binary);
+      // Windows has no chmod and needs none.
+      if (platform === 'win32') {
+        expect(mockExec).not.toHaveBeenCalledWith('chmod', expect.anything());
+      } else {
+        expect(mockExec).toHaveBeenCalledWith('chmod', ['+x', cachedBinary]);
+      }
+      expect(mockExec).toHaveBeenCalledWith(cachedBinary, expect.any(Array), expect.any(Object));
+      expect(mockSetFailed).not.toHaveBeenCalled();
+    });
+
+    it('fails clearly on a release without the runner\'s binary', async () => {
+      (os.platform as jest.Mock).mockReturnValue('darwin');
+      (os.arch as jest.Mock).mockReturnValue('arm64');
+      // Releases up to v0.2.1 list only the Linux x64 binary.
+      serveRelease(`${sha256('binary bytes')}  ${CORE_ASSET}\n`);
+
+      await run();
+
+      expect(mockSetFailed).toHaveBeenCalledWith(expect.stringContaining('soroban-budget-core v1.2.3 has no budget-core-darwin-arm64'));
+      expect(mockDownloadTool).not.toHaveBeenCalledWith(`${RELEASE}/budget-core-darwin-arm64`);
+      expect(mockCacheFile).not.toHaveBeenCalled();
+      expect(mockExec).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      { platform: 'win32', arch: 'ia32' },
+      { platform: 'freebsd', arch: 'x64' },
     ])('refuses to download on $platform/$arch', async ({ platform, arch }) => {
       (os.platform as jest.Mock).mockReturnValue(platform);
       (os.arch as jest.Mock).mockReturnValue(arch);
 
       await run();
 
-      expect(mockSetFailed).toHaveBeenCalledWith(expect.stringContaining('binary-version needs a Linux x64 runner'));
+      expect(mockSetFailed).toHaveBeenCalledWith(expect.stringContaining(`binary-version has no core binary for ${platform}/${arch}`));
       expect(mockDownloadTool).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('coreAsset', () => {
+    it.each([
+      ['linux', 'x64', 'budget-core-linux-amd64'],
+      ['linux', 'arm64', 'budget-core-linux-arm64'],
+      ['darwin', 'x64', 'budget-core-darwin-amd64'],
+      ['darwin', 'arm64', 'budget-core-darwin-arm64'],
+      ['win32', 'x64', 'budget-core-windows-amd64.exe'],
+      ['win32', 'arm64', 'budget-core-windows-arm64.exe'],
+    ])('names the binary for %s/%s', (platform, arch, asset) => {
+      expect(coreAsset(platform, arch)).toBe(asset);
     });
   });
 
