@@ -2,7 +2,9 @@
 # Deploys this commit's contracts to testnet and writes a Budget Gate fixture for them, so each
 # run measures the code being built rather than contracts deployed earlier.
 #
-# Uses a throwaway key funded by friendbot, so no secrets are needed. Needs the stellar CLI
+# Uses a throwaway key funded by friendbot, so no secrets are needed; set BUDGET_GATE_SECRET_KEY
+# to a funded testnet account's secret key (from a repository secret) to stop depending on
+# friendbot. Needs the stellar CLI
 # (stellar/stellar-cli action) and Rust with the wasm32v1-none target; pin the toolchain in
 # rust-toolchain.toml so the baseline and every pull request compile the same wasm.
 #
@@ -130,11 +132,44 @@ deploy() {
   return 1
 }
 
-retry stellar keys generate "$key" --network "$network" --fund --overwrite
+account_exists() {
+  stellar ledger entry fetch account --account "$1" --network "$network" | grep -q '"entries":\[{'
+}
+
+# Creates account $1 with 10 XLM paid by the run's account. A create that timed out after it
+# succeeded would make a retry fail, so a failed attempt first checks whether the account exists.
+create_account() {
+  local attempt
+  for attempt in 1 2 3; do
+    stellar tx new create-account --source-account "$key" --destination "$1" --starting-balance 100000000 --network "$network" >/dev/null && return 0
+    account_exists "$1" && return 0
+    echo "Attempt $attempt of creating account $1 failed." >&2
+    [ "$attempt" -lt 3 ] && sleep 15
+  done
+  return 1
+}
+
+# The run's account: a throwaway key funded by friendbot, or, with BUDGET_GATE_SECRET_KEY, that
+# funded account, which then pays for the ACCOUNTS below itself. Friendbot is still needed after a
+# testnet reset wipes that account.
+if [ -n "${BUDGET_GATE_SECRET_KEY:-}" ]; then
+  printf '%s\n' "$BUDGET_GATE_SECRET_KEY" | stellar keys add "$key" --secret-key --overwrite >/dev/null
+  if ! account_exists "$key"; then
+    echo "The BUDGET_GATE_SECRET_KEY account does not exist (testnet reset?); funding it with friendbot." >&2
+    retry stellar keys fund "$key" --network "$network"
+  fi
+else
+  retry stellar keys generate "$key" --network "$network" --fund --overwrite
+fi
 address="$(stellar keys address "$key")"
 # ${ACCOUNTS[@]+...} expands to nothing for an empty list instead of failing under set -u.
 for account in ${ACCOUNTS[@]+"${ACCOUNTS[@]}"}; do
-  retry stellar keys generate "$key-$account" --network "$network" --fund --overwrite
+  if [ -n "${BUDGET_GATE_SECRET_KEY:-}" ]; then
+    stellar keys generate "$key-$account" --overwrite
+    create_account "$(stellar keys address "$key-$account")"
+  else
+    retry stellar keys generate "$key-$account" --network "$network" --fund --overwrite
+  fi
   names+=("$account")
   ids+=("$(stellar keys address "$key-$account")")
 done
