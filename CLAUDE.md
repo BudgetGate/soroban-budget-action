@@ -54,7 +54,7 @@ Core's real measurement has landed (core #9, #8; verified on testnet), so the Ac
 1. Done 2026-10-28: run end to end in `BudgetGate/budgetgate-action-test` (push run and PRs #1–#3, recorded in #25 and #26), and A3: release `v0.2.0`, an exact tag (no moving `v0`).
 2. `v0.2.1` (2026-10-29, maintainer's request): A21, A22 and core `0.2.1` in the examples; `package.json` bumped first, then an exact tag.
 3. `v0.2.2` (2026-10-29, maintainer's request): A23 (Linux, macOS and Windows runners on x64 and arm64, with core v0.2.2) and A24 (cached baseline shared with Windows runners); `package.json` bumped first, then an exact tag.
-4. Next releases: a new exact tag (`v0.2.3`, `v0.3.0`, …) only when the maintainer asks, after `main` CI is green; bump `package.json` to match first. Never move or force-push a tag.
+4. Next releases: a new exact tag (`v0.2.3`, `v0.3.0`, …) only when the maintainer asks, after `main` CI is green; bump `package.json` to match first. The maintainer pushes the tag (a tag ruleset restricts `v*` to admins), and `.github/workflows/release.yml` (Phase 9 item 17) checks that the tag equals `v` + `package.json`'s version, that `dist/` is a fresh build, and that the tests pass, then runs `gh release create --verify-tag --generate-notes`. Never move or force-push a tag.
 
 `roadmap.md` tracks progress against this list.
 
