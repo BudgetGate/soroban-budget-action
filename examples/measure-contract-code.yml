@@ -35,6 +35,10 @@ jobs:
 
       - name: Deploy this commit's contracts and write the fixture
         run: budget/build-fixture.sh
+        env:
+          # Optional: a funded testnet account's secret key, so runs do not need friendbot.
+          # Empty when the repository has no such secret; the script then uses friendbot.
+          BUDGET_GATE_SECRET_KEY: ${{ secrets.BUDGET_GATE_SECRET_KEY }}
 
       - name: Run Budget Gate
         uses: BudgetGate/soroban-budget-action@v0.2.2
