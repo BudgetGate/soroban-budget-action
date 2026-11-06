@@ -2,13 +2,13 @@
 
 Progress tracker for this repo. The defect IDs (A1, A2, …) and their evidence are in `CLAUDE.md` section 3; the order comes from `CLAUDE.md` section 4. Tick a box only when the change is merged to `main`.
 
-Last updated: 2026-10-29
+Last updated: 2026-11-06
 
 ## Where I left off
 
-- `main` is at `909e535` (after #32; `v0.2.0` is tagged on `467b83f`, so `@v0.2.0` users do not have A21 yet). `dist/index.js` is in sync with `src/` (CI's rebuild check passed 2026-10-29); 38 of 38 tests pass on `main` (checked locally 2026-10-29).
+- `main` is at `570836a` (2026-11-06). The latest release is `v0.2.2`, tagged on `9ca2978`; since then `dist/index.js` differs only in build-tool output from ncc 0.45.0 and TypeScript 5.9 plus one comment, so no release is needed. CI's rebuild check keeps `dist/` in sync with `src/`; 51 tests pass (#85).
 - A13 done: the tool-cache test builds its expected path with `path.join`; 6 of 6 tests pass on Windows and Linux.
-- Core is feature-complete for its work order (exit code 2 for errors, report-only stdout, live network caps). The docs site's setup page shows the interim workflow: build core from source, pass `binary-path`.
+- Core is feature-complete for its work order (exit code 2 for errors, report-only stdout, live network caps). The docs site's setup page uses `binary-version`.
 - A10 done: CI rebuilds `dist/` and fails if it differs from the committed copy.
 - A8 done: regression is decided by core's exit code only; a core error fails the step with core's stderr, posts no comment and saves no cache.
 - A9 done: one report comment per PR, found by the hidden marker `<!-- budgetgate-report -->` and updated on each run.
@@ -44,7 +44,7 @@ Last updated: 2026-10-29
 - A22 (2026-10-29): `dist/` is no longer gitignored; `dist/835.index.js` (the `apache-arrow` chunk `index.js` requires) and `dist/licenses.txt` are committed; CI fails on any changed, new or deleted file in `dist/` (`git status --porcelain`, checked locally: the old `git diff --quiet` passed with both files missing, the new check listed them) and uploads all of `dist/`. `dist/index.js` is unchanged, so runtime behaviour is the same.
 - Core v0.2.1 (2026-10-29, core C19: built with go1.26.10, which fixes 10 reachable standard-library vulnerabilities in the go1.25.14 v0.2.0 binary): README, `examples/*.yml` and the `binary-version` description now use `0.2.1`; the Action pin stays `@v0.2.0` until an Action `v0.2.1` exists. Ran in `budgetgate-action-test` PR #6 with the Action at `aaba24a` and `binary-version: 0.2.1`: counter v2 (run 40851643805) downloaded core v0.2.1, matched `SHA256SUMS`, restored the cached baseline `budgetgate-baseline-86a4a71…`, CPU 291,573 → 449,005, posted comment `6493278410`, failed as a regression; counter v1 (run 40851712042) updated the same comment and passed.
 - `v0.2.1` released 2026-10-29 (maintainer's request): `package.json` bumped in #36, `main` CI green on `913b060`, exact tag `v0.2.1` on `913b060` with a GitHub release. Before tagging, test repo PR #6 merged (push run 40852597200 with the Action at `aaba24a` and core v0.2.1: cache saved, `history.json` 4 → 5). Test repo PR #7 ran `@v0.2.1` (run 40853059748): resolved to `913b060`, downloaded core v0.2.1, matched `SHA256SUMS`, restored the cache saved by that push, "No regression", comment posted. README and examples pin `@v0.2.1`.
-- A23 (2026-10-29, open PR): `binary-version` picks the runner's core binary on Linux, macOS and Windows (x64, arm64), reads `SHA256SUMS` first so an older core release fails with a clear message, and skips `chmod` on Windows; 50 tests. It needs a core release built by core C20's workflow before it can run for real.
+- A23 (2026-10-29, #40): `binary-version` picks the runner's core binary on Linux, macOS and Windows (x64, arm64), reads `SHA256SUMS` first so an older core release fails with a clear message, and skips `chmod` on Windows; 50 tests. It needs a core release built by core C20's workflow before it can run for real.
 - A23 verified (2026-10-29): with core v0.2.2, test repo PR #8 (run 40875361973) downloaded and checksum-matched the right binary on `ubuntu-latest`, `ubuntu-24.04-arm`, `macos-26-intel`, `macos-latest`, `windows-latest` and `windows-11-arm`, and each measured the counter (CPU 291,573).
 - A24 (found in that run): both Windows runners compared against an empty baseline, because the Linux-saved cache entry never matched on Windows (`windows-only` cache version, backslash path). Fixed with a fixed `/` path and `enableCrossOsArchive`; the same PR #8 (run 40875749663) then restored `budgetgate-baseline-5fbacd3…` on all six runners. 51 tests.
 - `v0.2.2` released 2026-10-29 (maintainer's request): version bump #42, `main` CI green, exact tag `v0.2.2` on `9ca2978` with a GitHub release (A23, A24). Test repo PR #8 ran `@v0.2.2` (run 40877811065) with the counter v2 fixture on `ubuntu-latest`, `ubuntu-24.04-arm`, `macos-26-intel`, `macos-latest`, `windows-latest` and `windows-11-arm`: each resolved the tag to `9ca2978`, downloaded and checksum-matched its own core v0.2.2 binary, restored the Linux-saved baseline `5fbacd3…` and reported the regression (CPU 291,573 → 449,005), failing the step as intended. README and examples pin `@v0.2.2` with core `0.2.2`.
@@ -58,7 +58,11 @@ Last updated: 2026-10-29
 - Quoted arguments (2026-10-29, workspace Phase 9 item 4): lines were split on spaces, so no argument could contain one (no text with spaces, no JSON for vectors, maps or structs). `split_words` now splits like a shell, honouring quotes, via `xargs` (nothing is run; bash 3.2 compatible); an unmatched quote stops the script. Test repo PR #17 adds a greeter contract: its transactions carry `"Budget Gate"` and `[1, 2, 3]` intact, measured on testnet (269,062 and 272,614 CPU), the other calls unchanged.
 - Funded key from a secret (2026-10-30, workspace Phase 9 item 18): every run used friendbot, so its outages failed every PR check. With `BUDGET_GATE_SECRET_KEY` (a funded testnet secret key, added from stdin), the script uses that account and creates `ACCOUNTS` by transfer; friendbot only when a testnet reset wiped it. `measure-contract-code.yml` passes the optional secret. Run on testnet (test repo PR #19): funded secret (no friendbot), missing account (friendbot once), no secret (as before) all measured the same six calls.
 - Release workflow (2026-10-30, workspace Phase 9 item 17): releases were made by hand. `release.yml` runs on a `v*` tag: tag equals `v` + `package.json` version, `npm ci`, build, committed `dist/` equals the fresh build, tests, then a GitHub release with generated notes (`contents: write` on the publish job only). A PR that changes it runs the checks without publishing. The version check was run locally: `v0.2.2` passes, `v0.2.3` and `0.2.2` fail.
-- Next up: no open defects. A new release only when the maintainer asks.
+- Core versions (2026-11-06): README and examples moved to core `0.2.4` (#84) and `0.2.5` (#88) with the `@v0.2.2` pin; test repo PRs #20 and #21 ran them.
+- `Audit` fixed (2026-11-06, #85): 16 moderate findings from `glob` and `minimatch` in Jest's dev dependencies, overridden with scope so the `minimatch` bundled into `dist/` does not change. Now 0 moderate, 6 low, runtime 0, and `dist/` is byte-identical. Remove the overrides once Jest ships the fixes.
+- Supply chain (2026-11-06): `Dependency review` runs on every PR to `main` and `Audit` also runs `npm audit signatures` (#89); test repo PR #23 proved the review fails a malicious package. CI's token is `contents: read` (#90), which cleared CodeQL's finding.
+- README badges, links and a Community section (#87).
+- Next up: no open defects. Planned work is in the 24 open issues; fork pull requests (#59) is the one named as a gap against the competitors in the workspace `LANDSCAPE.md`. A new release only when the maintainer asks.
 
 ## Blocked on core
 
@@ -101,6 +105,8 @@ Nothing left — core delivered all three, so no part of this repo's work order 
 - [x] A2: a default that obtains a working core binary; examples that run as written
 - [x] Run the Action against a real PR in a test repository and record the result (`budgetgate-action-test` PRs #1–#3, 2026-10-28: regression, comment update, failed-run create and replace, cache restore, clean pass)
 - [x] A3: release `v0.2.0` (exact tag, no moving `v0`), after a real-workflow run and only when the maintainer asks
+- [x] Release `v0.2.1` with A21 and A22 (2026-10-29, tag on `913b060`)
+- [x] Release `v0.2.2` with A23 and A24 (2026-10-29, tag on `9ca2978`)
 
 ## Maintainer actions (Claude must not do these)
 
