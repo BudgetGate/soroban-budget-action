@@ -44,4 +44,4 @@ jobs:
         uses: BudgetGate/soroban-budget-action@v0.2.2
         with:
           fixture-path: budget/fixture.json
-          binary-version: '0.2.4'
+          binary-version: '0.2.5'
