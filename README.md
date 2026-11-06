@@ -2,6 +2,16 @@
 
 # soroban-budget-action
 
+<p align="center">
+  <a href="https://github.com/BudgetGate/soroban-budget-action/actions/workflows/ci.yml"><img src="https://github.com/BudgetGate/soroban-budget-action/actions/workflows/ci.yml/badge.svg" alt="Action CI"></a>
+  <a href="https://github.com/BudgetGate/soroban-budget-action/releases/latest"><img src="https://img.shields.io/github/v/release/BudgetGate/soroban-budget-action" alt="Latest release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/BudgetGate/soroban-budget-action" alt="License: MIT"></a>
+</p>
+
+<p align="center"><a href="https://budgetgate.github.io/docs/">Docs</a> · <a href="https://budgetgate.github.io/docs/#see-it-run">Demo (75 s)</a> · <a href="https://budgetgate-dashboard.vercel.app/">Dashboard</a> · <a href="https://github.com/BudgetGate/soroban-budget-core/discussions">Discussions</a></p>
+
+**Budget Gate fails a pull request when a Soroban contract function gets more expensive.** It measures each function through a Soroban RPC, testnet in the examples, so there is no local network to set up, and it keeps the history. Soroban enforces resource limits when a transaction executes, so a change that passes every test can still make a call cost more, or push it past a network limit.
+
 A GitHub Action that runs [soroban-budget-core](https://github.com/BudgetGate/soroban-budget-core) on your Soroban contract calls, comments the cost report on the pull request, and fails the check when a function's cost regresses.
 
 **Documentation:** [budgetgate.github.io/docs/action](https://budgetgate.github.io/docs/action/).
@@ -79,6 +89,10 @@ npm run build     # bundles src/ into dist/index.js, which action.yml runs
 ```
 
 Commit all of `dist/` with every change under `src/`; CI fails when any file in it differs from a fresh build.
+
+## Community
+
+Questions and ideas: [GitHub Discussions](https://github.com/BudgetGate/soroban-budget-core/discussions). Contributions are welcome; see [`CONTRIBUTING.md`](CONTRIBUTING.md) and the [open issues](https://github.com/BudgetGate/soroban-budget-action/issues).
 
 ## Security
 
