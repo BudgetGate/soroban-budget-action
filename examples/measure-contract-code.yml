@@ -38,7 +38,9 @@ jobs:
         env:
           # Optional: a funded testnet account's secret key, so runs do not need friendbot.
           # Empty when the repository has no such secret; the script then uses friendbot.
-          BUDGET_GATE_SECRET_KEY: ${{ secrets.BUDGET_GATE_SECRET_KEY }}
+          # Only pushes get it: on a pull request this step runs the pull request's own code
+          # (build-fixture.sh, build scripts), which could read the key.
+          BUDGET_GATE_SECRET_KEY: ${{ github.event_name == 'push' && secrets.BUDGET_GATE_SECRET_KEY || '' }}
 
       - name: Run Budget Gate
         uses: BudgetGate/soroban-budget-action@v0.2.2
