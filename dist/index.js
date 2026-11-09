@@ -48629,7 +48629,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.HISTORY_LIMIT = exports.HISTORY_FILE = exports.BASELINE_CACHE_PREFIX = exports.BASELINE_CACHE_PATH = exports.COMMENT_MARKER = void 0;
+exports.HISTORY_LIMIT = exports.HISTORY_FILE = exports.BASE_BASELINE_PATH = exports.BASELINE_CACHE_PREFIX = exports.BASELINE_CACHE_PATH = exports.COMMENT_MARKER = void 0;
 exports.coreAsset = coreAsset;
 exports.verifyChecksum = verifyChecksum;
 exports.failedRunComment = failedRunComment;
@@ -48681,13 +48681,81 @@ function verifyChecksum(filePath, sums, name) {
 }
 // A baseline with no functions: core then reports every function as new.
 const EMPTY_BASELINE = '{"schema_version":"2.0","functions":[]}\n';
+// Where the base commit's copy of a committed baseline file is written on pull requests.
+exports.BASE_BASELINE_PATH = '.budgetgate/base-baseline.json';
+// trackedPath returns the repository-relative path of a file committed in the checkout, or
+// undefined when git does not track it (a file an earlier step wrote) or there is no checkout.
+async function trackedPath(file) {
+    try {
+        const { exitCode, stdout } = await exec.getExecOutput('git', ['ls-files', '--error-unmatch', '--full-name', '--', file], { ignoreReturnCode: true, silent: true });
+        return exitCode === 0 ? stdout.trim().split('\n')[0] : undefined;
+    }
+    catch {
+        return undefined;
+    }
+}
+// fileAtCommit returns a file's contents at a commit, or undefined when it does not exist there.
+async function fileAtCommit(token, filePath, ref) {
+    const octokit = github.getOctokit(token);
+    try {
+        const response = await octokit.rest.repos.getContent({ ...github.context.repo, path: filePath, ref, mediaType: { format: 'raw' } });
+        // With the raw media type a file arrives as a string; a directory still arrives as JSON.
+        const data = response.data;
+        if (typeof data !== 'string') {
+            throw new Error(`${filePath} at ${ref.substring(0, 7)} is not a file`);
+        }
+        return data;
+    }
+    catch (e) {
+        if (isNotFound(e))
+            return undefined;
+        throw e;
+    }
+}
+// rejectPullRequestFile fails when a file that decides the result is committed, since a pull
+// request can then change it: a baseline in --new mode, or the core binary. On other events the
+// code has been merged, so it is trusted.
+async function rejectPullRequestFile(file, what, instead) {
+    if (github.context.payload.pull_request && await trackedPath(file)) {
+        throw new Error(`${what} ${file} is committed in the repository, so a pull request could change it and pass its own check. ${instead}`);
+    }
+}
 // resolveBaseline picks the baseline to compare against: a file at baseline-path if it exists,
 // else the snapshot cached from the base branch, else an empty baseline with a visible note.
-async function resolveBaseline(baselinePath) {
-    if (fs.existsSync(baselinePath)) {
+// On a pull request a committed baseline file is read from the base commit, since the pull
+// request could edit it; a file written by an earlier step (not committed) is used as it is.
+async function resolveBaseline(baselinePath, token) {
+    if (!fs.existsSync(baselinePath)) {
+        return resolveCachedBaseline(baselinePath);
+    }
+    const pr = github.context.payload.pull_request;
+    const tracked = pr ? await trackedPath(baselinePath) : undefined;
+    if (!pr || !tracked) {
         core.info(`Using baseline file ${baselinePath}.`);
         return { path: baselinePath };
     }
+    const baseSha = pr.base?.sha ?? '';
+    const baseCopy = baseSha ? await fileAtCommit(token, tracked, baseSha) : undefined;
+    if (baseCopy !== undefined) {
+        fs.mkdirSync(path.dirname(exports.BASE_BASELINE_PATH), { recursive: true });
+        fs.writeFileSync(exports.BASE_BASELINE_PATH, baseCopy);
+        core.info(`Using ${baselinePath} from the base commit ${baseSha.substring(0, 7)}.`);
+        if (baseCopy === fs.readFileSync(baselinePath, 'utf8')) {
+            return { path: exports.BASE_BASELINE_PATH };
+        }
+        return {
+            path: exports.BASE_BASELINE_PATH,
+            note: `> **This pull request changes \`${baselinePath}\`.** It is compared against the base branch's copy; the new baseline applies once it is merged.`,
+        };
+    }
+    core.warning(`${baselinePath} is not in the base commit, so a baseline added by this pull request is not used.`);
+    const cached = await resolveCachedBaseline(baselinePath);
+    const added = `> **This pull request adds \`${baselinePath}\`.** A baseline added by a pull request is not used until it is merged.`;
+    return { path: cached.path, note: cached.note ? `${added}\n\n${cached.note}` : added };
+}
+// resolveCachedBaseline restores the snapshot cached from the base branch, or writes an empty
+// baseline with a visible note.
+async function resolveCachedBaseline(baselinePath) {
     const pr = github.context.payload.pull_request;
     const baseSha = pr?.base?.sha ?? github.context.payload.before ?? '';
     const exactKey = `${exports.BASELINE_CACHE_PREFIX}${baseSha}`;
@@ -48864,7 +48932,8 @@ async function run() {
         const binaryVersion = core.getInput('binary-version');
         const historyBranch = core.getInput('history-branch');
         // Download binary if version is specified
-        if (binaryVersion && !binaryPath) {
+        const downloadCore = Boolean(binaryVersion && !binaryPath);
+        if (downloadCore) {
             const asset = coreAsset(os.platform(), os.arch());
             core.info(`Downloading soroban-budget-core v${binaryVersion} (${asset})...`);
             const release = `${CORE_RELEASES}/v${binaryVersion}`;
@@ -48887,7 +48956,13 @@ async function run() {
         else if (!binaryPath) {
             binaryPath = './budget-core';
         }
-        const baseline = await resolveBaseline(baselinePath);
+        if (!downloadCore) {
+            await rejectPullRequestFile(binaryPath, 'The core binary', 'Use binary-version, or build core in an earlier step without committing it.');
+        }
+        if (!fixturePath) {
+            await rejectPullRequestFile(newPath || 'new.json', 'The new snapshot', 'Write it in an earlier step without committing it, or use fixture-path.');
+        }
+        const baseline = await resolveBaseline(baselinePath, token);
         core.info(`Running Soroban Budget Guard Core against ${baseline.path}`);
         let output = '';
         let errorOutput = '';

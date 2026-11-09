@@ -7,7 +7,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as crypto from 'crypto';
-import { run, verifyChecksum, coreAsset, COMMENT_MARKER, BASELINE_CACHE_PATH, BASELINE_CACHE_PREFIX, HISTORY_FILE, HISTORY_LIMIT } from '../src/index';
+import { run, verifyChecksum, coreAsset, COMMENT_MARKER, BASELINE_CACHE_PATH, BASELINE_CACHE_PREFIX, BASE_BASELINE_PATH, HISTORY_FILE, HISTORY_LIMIT } from '../src/index';
 
 jest.mock('@actions/cache');
 jest.mock('@actions/core');
@@ -58,6 +58,9 @@ describe('soroban-budget-action', () => {
     mockDownloadTool = tc.downloadTool as jest.Mock;
     mockCacheFile = tc.cacheFile as jest.Mock;
     
+    // git ls-files: nothing is committed unless a test says otherwise.
+    (exec.getExecOutput as jest.Mock).mockResolvedValue({ exitCode: 1, stdout: '', stderr: '' });
+
     mockSummary = { addRaw: jest.fn().mockReturnThis(), write: jest.fn().mockResolvedValue(undefined) };
     Object.defineProperty(core, 'summary', { value: mockSummary, writable: true });
 
@@ -773,6 +776,119 @@ old report` }]);
       expect(baselineArg()).toBe(BASELINE_CACHE_PATH);
       expect(core.warning).toHaveBeenCalledWith(expect.stringContaining('cache service unavailable'));
       expect(mockSetFailed).not.toHaveBeenCalled();
+    });
+
+    describe('committed files on a pull request', () => {
+      let getContent: jest.Mock;
+      // git ls-files reports these files as committed, under the given repository paths.
+      const committed = (files: Record<string, string>) => {
+        (exec.getExecOutput as jest.Mock).mockImplementation(async (_cmd: string, args: string[]) => {
+          const file = args[args.length - 1];
+          return file in files ? { exitCode: 0, stdout: `${files[file]}\n`, stderr: '' } : { exitCode: 1, stdout: '', stderr: '' };
+        });
+      };
+
+      beforeEach(() => {
+        getContent = jest.fn();
+        (github.getOctokit as jest.Mock).mockReturnValue({
+          paginate: mockPaginate,
+          rest: { issues: { createComment: mockCreateComment, updateComment: mockUpdateComment, listComments: mockListComments }, repos: { getContent } },
+        });
+        mockGetInput.mockImplementation(inputs({ 'baseline-path': 'budget/baseline.json' }));
+        fs.mkdirSync('budget');
+        mockExec.mockResolvedValue(0);
+      });
+
+      it('uses the base commit\'s copy of a committed baseline', async () => {
+        fs.writeFileSync('budget/baseline.json', EMPTY);
+        committed({ 'budget/baseline.json': 'budget/baseline.json' });
+        getContent.mockResolvedValue({ data: EMPTY });
+
+        await run();
+
+        expect(getContent).toHaveBeenCalledWith({ owner: 'test-owner', repo: 'test-repo', path: 'budget/baseline.json', ref: 'basesha', mediaType: { format: 'raw' } });
+        expect(baselineArg()).toBe(BASE_BASELINE_PATH);
+        expect(mockCreateComment).toHaveBeenCalledWith(expect.objectContaining({ body: expect.not.stringContaining('This pull request changes') }));
+      });
+
+      it('compares against the base copy, with a note, when the pull request edits the baseline', async () => {
+        const inflated = '{"schema_version":"2.0","functions":[{"name":"f","cpu_instructions":999999999}]}';
+        fs.writeFileSync('budget/baseline.json', inflated);
+        committed({ 'budget/baseline.json': 'budget/baseline.json' });
+        getContent.mockResolvedValue({ data: EMPTY });
+
+        await run();
+
+        expect(baselineArg()).toBe(BASE_BASELINE_PATH);
+        expect(fs.readFileSync(BASE_BASELINE_PATH, 'utf8')).toBe(EMPTY);
+        expect(mockCreateComment).toHaveBeenCalledWith(expect.objectContaining({ body: expect.stringContaining('**This pull request changes `budget/baseline.json`.**') }));
+      });
+
+      it('ignores a baseline the pull request adds and uses the cache', async () => {
+        fs.writeFileSync('budget/baseline.json', EMPTY);
+        committed({ 'budget/baseline.json': 'budget/baseline.json' });
+        getContent.mockRejectedValue(Object.assign(new Error('Not Found'), { status: 404 }));
+        mockRestoreCache.mockResolvedValue(`${BASELINE_CACHE_PREFIX}basesha`);
+
+        await run();
+
+        expect(baselineArg()).toBe(BASELINE_CACHE_PATH);
+        expect(mockCreateComment).toHaveBeenCalledWith(expect.objectContaining({ body: expect.stringContaining('**This pull request adds `budget/baseline.json`.**') }));
+      });
+
+      it('fails rather than use the pull request\'s copy when the base copy cannot be read', async () => {
+        fs.writeFileSync('budget/baseline.json', EMPTY);
+        committed({ 'budget/baseline.json': 'budget/baseline.json' });
+        getContent.mockRejectedValue(Object.assign(new Error('Server Error'), { status: 500 }));
+
+        await run();
+
+        expect(mockSetFailed).toHaveBeenCalledWith('Server Error');
+        expect(baselineArg()).toBeUndefined();
+      });
+
+      it('uses a baseline file an earlier step wrote (not committed) as it is', async () => {
+        fs.writeFileSync('budget/baseline.json', EMPTY);
+
+        await run();
+
+        expect(getContent).not.toHaveBeenCalled();
+        expect(baselineArg()).toBe('budget/baseline.json');
+      });
+
+      it('refuses a committed core binary', async () => {
+        committed({ './budget-core': 'budget-core' });
+
+        await run();
+
+        expect(mockSetFailed).toHaveBeenCalledWith(expect.stringContaining('The core binary ./budget-core is committed in the repository'));
+        expect(mockExec).not.toHaveBeenCalled();
+      });
+
+      it('refuses a committed new snapshot in new-path mode', async () => {
+        mockGetInput.mockImplementation(inputs({ 'fixture-path': '', 'new-path': 'budget/new.json' }));
+        committed({ 'budget/new.json': 'budget/new.json' });
+
+        await run();
+
+        expect(mockSetFailed).toHaveBeenCalledWith(expect.stringContaining('The new snapshot budget/new.json is committed in the repository'));
+        expect(mockExec).not.toHaveBeenCalled();
+      });
+
+      it('trusts committed files on a push, where the code is merged', async () => {
+        Object.defineProperty(github, 'context', {
+          value: { payload: { repository: { default_branch: 'main' }, before: 'prevsha' }, repo: { owner: 'test-owner', repo: 'test-repo' }, sha: 'headsha', ref: 'refs/heads/feature' },
+          writable: true,
+        });
+        fs.writeFileSync('budget/baseline.json', EMPTY);
+        committed({ 'budget/baseline.json': 'budget/baseline.json', './budget-core': 'budget-core' });
+
+        await run();
+
+        expect(getContent).not.toHaveBeenCalled();
+        expect(baselineArg()).toBe('budget/baseline.json');
+        expect(mockSetFailed).not.toHaveBeenCalled();
+      });
     });
 
     describe('on a push', () => {
