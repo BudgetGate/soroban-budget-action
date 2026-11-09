@@ -316,6 +316,20 @@ old report` },
     }
   });
 
+  it('writes the failed-run note, without core\'s stderr, to the job summary after a core error', async () => {
+    mockGetInput.mockReturnValue('default');
+    mockExec.mockImplementation(async (cmd, args, options) => {
+      options?.listeners?.stderr?.(Buffer.from('Error reading network caps from https://rpc.example/key-123'));
+      return 2;
+    });
+
+    await run();
+
+    const summary: string = mockSummary.addRaw.mock.calls[0][0];
+    expect(summary).toContain('**The latest run failed:**');
+    expect(summary).not.toContain('key-123');
+  });
+
   it('writes the report to the job summary outside a pull request too', async () => {
     mockGetInput.mockReturnValue('default');
     Object.defineProperty(github, 'context', {
