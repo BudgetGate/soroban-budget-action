@@ -725,6 +725,20 @@ old report` }]);
       expect(mockCreateComment).toHaveBeenCalledWith(expect.objectContaining({ body: expect.not.stringContaining('No baseline found') }));
     });
 
+    it('notes when the restored baseline is from another commit than the base', async () => {
+      mockGetInput.mockImplementation(inputs());
+      mockRestoreCache.mockResolvedValue(`${BASELINE_CACHE_PREFIX}0123456789abcdef`);
+      mockExec.mockResolvedValue(0);
+
+      await run();
+
+      expect(baselineArg()).toBe(BASELINE_CACHE_PATH);
+      expect(core.warning).toHaveBeenCalledWith(expect.stringContaining(`comparing against ${BASELINE_CACHE_PREFIX}0123456789abcdef`));
+      expect(mockCreateComment).toHaveBeenCalledWith(expect.objectContaining({
+        body: expect.stringContaining('**Baseline from another commit:** nothing was cached for the base commit (`basesha`), so this compares against the newest cached baseline (`0123456`)'),
+      }));
+    });
+
     it('falls back to an empty baseline with a visible note when nothing is cached', async () => {
       mockGetInput.mockImplementation(inputs());
       mockExec.mockResolvedValue(0);

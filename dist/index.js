@@ -48690,11 +48690,21 @@ async function resolveBaseline(baselinePath) {
     }
     const pr = github.context.payload.pull_request;
     const baseSha = pr?.base?.sha ?? github.context.payload.before ?? '';
+    const exactKey = `${exports.BASELINE_CACHE_PREFIX}${baseSha}`;
     try {
-        const key = await cache.restoreCache([exports.BASELINE_CACHE_PATH], `${exports.BASELINE_CACHE_PREFIX}${baseSha}`, [exports.BASELINE_CACHE_PREFIX], undefined, CROSS_OS_CACHE);
+        const key = await cache.restoreCache([exports.BASELINE_CACHE_PATH], exactKey, [exports.BASELINE_CACHE_PREFIX], undefined, CROSS_OS_CACHE);
         if (key) {
             core.info(`Restored baseline from cache entry ${key}.`);
-            return { path: exports.BASELINE_CACHE_PATH };
+            if (key === exactKey) {
+                return { path: exports.BASELINE_CACHE_PATH };
+            }
+            // The prefix fallback picks the newest baseline of any commit, for example after GitHub
+            // evicted the base commit's entry. Its deltas include every change since that commit.
+            core.warning(`No baseline was cached for ${baseSha ? `commit ${baseSha.substring(0, 7)}` : 'this run'}; comparing against ${key} instead.`);
+            return {
+                path: exports.BASELINE_CACHE_PATH,
+                note: `> **Baseline from another commit:** nothing was cached for ${baseSha ? `the base commit (\`${baseSha.substring(0, 7)}\`)` : 'this run'}, so this compares against the newest cached baseline (\`${key.substring(exports.BASELINE_CACHE_PREFIX.length, exports.BASELINE_CACHE_PREFIX.length + 7)}\`). Changes made between the two commits show up in the deltas too.`,
+            };
         }
         core.warning(`No baseline file at ${baselinePath} and no cached baseline. Every function will show as new.`);
     }
