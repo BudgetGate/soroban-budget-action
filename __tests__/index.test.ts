@@ -330,6 +330,15 @@ old report` }]);
 
     expect(mockSetFailed).toHaveBeenCalledWith(errorMsg);
   });
+
+  it('fails when something other than an Error is thrown', async () => {
+    mockGetInput.mockReturnValue('default');
+    mockExec.mockRejectedValue('spawn budget-core ENOENT');
+
+    await run();
+
+    expect(mockSetFailed).toHaveBeenCalledWith('spawn budget-core ENOENT');
+  });
   describe('binary-version', () => {
     const RELEASE = 'https://github.com/BudgetGate/soroban-budget-core/releases/download/v1.2.3';
     const CORE_ASSET = 'budget-core-linux-amd64';

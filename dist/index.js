@@ -48931,8 +48931,8 @@ async function run() {
         }
     }
     catch (error) {
-        if (error instanceof Error)
-            core.setFailed(error.message);
+        // Anything thrown must fail the step; a non-Error value would otherwise end the run green.
+        core.setFailed(error instanceof Error ? error.message : String(error));
     }
 }
 if (require.main === require.cache[eval('__filename')]) {

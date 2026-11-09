@@ -325,7 +325,8 @@ export async function run(): Promise<void> {
     }
 
   } catch (error) {
-    if (error instanceof Error) core.setFailed(error.message);
+    // Anything thrown must fail the step; a non-Error value would otherwise end the run green.
+    core.setFailed(error instanceof Error ? error.message : String(error));
   }
 }
 
