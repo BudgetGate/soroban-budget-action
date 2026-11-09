@@ -5,7 +5,8 @@
 # Uses a throwaway key funded by friendbot, so no secrets are needed; set BUDGET_GATE_SECRET_KEY
 # to a funded testnet account's secret key (from a repository secret) to stop depending on
 # friendbot. Needs the stellar CLI
-# (stellar/stellar-cli action) and Rust with the wasm32v1-none target; pin the toolchain in
+# (stellar/stellar-cli action), jq (preinstalled on GitHub-hosted runners) and Rust with the
+# wasm32v1-none target; pin the toolchain in
 # rust-toolchain.toml so the baseline and every pull request compile the same wasm.
 #
 # Edit CONTRACTS and CALLS for your contracts.
@@ -199,7 +200,8 @@ for call in "${CALLS[@]}"; do
   reported+="$name "
   id="$(id_of "${words[1]}")"
   xdr="$(retry stellar contract invoke --id "$id" --source "$key" --network "$network" --build-only -- "${words[@]:2}")"
-  entries+=("{\"name\":\"$name\",\"fixture_id\":\"$name\",\"xdr\":\"$xdr\"}")
+  # jq escapes the values, so a name with a quote or backslash still gives valid JSON.
+  entries+=("$(jq -cn --arg name "$name" --arg xdr "$xdr" '{name: $name, fixture_id: $name, xdr: $xdr}')")
 done
 
 mkdir -p "$(dirname "$OUT")"
