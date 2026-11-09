@@ -8,20 +8,20 @@ inputs:
     required: false
     default: ${{ github.token }}
   baseline-path:
-    description: 'Path to the baseline snapshot JSON'
+    description: 'Path to the baseline snapshot JSON; on a pull request a committed file is read from the base commit'
     required: false
     default: 'baseline.json'
   new-path:
-    description: 'Path to an existing snapshot to compare when fixture-path is not set (defaults to new.json)'
+    description: 'Path to an existing snapshot to compare when fixture-path is not set (defaults to new.json); on a pull request it must not be committed'
     required: false
   fixture-path:
     description: 'Path to a fixture of contract calls to simulate; the measured snapshot is compared against the baseline'
     required: false
   rpc-url:
-    description: 'Soroban RPC URL used with fixture-path (core defaults to testnet); pass it from a secret if it contains a key'
+    description: 'Soroban RPC URL used with fixture-path (core defaults to testnet); pass it from a secret if it contains a key; masked in the log'
     required: false
   binary-path:
-    description: 'Path to a budget-core binary (defaults to ./budget-core); wins over binary-version'
+    description: 'Path to a budget-core binary (defaults to ./budget-core); wins over binary-version; on a pull request it must not be committed'
     required: false
   binary-version:
     description: 'soroban-budget-core release to download, e.g. 0.2.5; picks the runner''s binary (Linux, macOS or Windows, x64 or arm64; core v0.2.1 and earlier only ship Linux x64) and checks it against the release SHA256SUMS'

@@ -58,21 +58,102 @@ interface Baseline {
   note?: string;
 }
 
+// Where the base commit's copy of a committed baseline file is written on pull requests.
+export const BASE_BASELINE_PATH = '.budgetgate/base-baseline.json';
+
+// trackedPath returns the repository-relative path of a file committed in the checkout, or
+// undefined when git does not track it (a file an earlier step wrote) or there is no checkout.
+async function trackedPath(file: string): Promise<string | undefined> {
+  try {
+    const { exitCode, stdout } = await exec.getExecOutput('git', ['ls-files', '--error-unmatch', '--full-name', '--', file], { ignoreReturnCode: true, silent: true });
+    return exitCode === 0 ? stdout.trim().split('\n')[0] : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+// fileAtCommit returns a file's contents at a commit, or undefined when it does not exist there.
+async function fileAtCommit(token: string, filePath: string, ref: string): Promise<string | undefined> {
+  const octokit = github.getOctokit(token);
+  try {
+    const response = await octokit.rest.repos.getContent({ ...github.context.repo, path: filePath, ref, mediaType: { format: 'raw' } });
+    // With the raw media type a file arrives as a string; a directory still arrives as JSON.
+    const data: unknown = response.data;
+    if (typeof data !== 'string') {
+      throw new Error(`${filePath} at ${ref.substring(0, 7)} is not a file`);
+    }
+    return data;
+  } catch (e) {
+    if (isNotFound(e)) return undefined;
+    throw e;
+  }
+}
+
+// rejectPullRequestFile fails when a file that decides the result is committed, since a pull
+// request can then change it: a baseline in --new mode, or the core binary. On other events the
+// code has been merged, so it is trusted.
+async function rejectPullRequestFile(file: string, what: string, instead: string): Promise<void> {
+  if (github.context.payload.pull_request && await trackedPath(file)) {
+    throw new Error(`${what} ${file} is committed in the repository, so a pull request could change it and pass its own check. ${instead}`);
+  }
+}
+
 // resolveBaseline picks the baseline to compare against: a file at baseline-path if it exists,
 // else the snapshot cached from the base branch, else an empty baseline with a visible note.
-async function resolveBaseline(baselinePath: string): Promise<Baseline> {
-  if (fs.existsSync(baselinePath)) {
+// On a pull request a committed baseline file is read from the base commit, since the pull
+// request could edit it; a file written by an earlier step (not committed) is used as it is.
+async function resolveBaseline(baselinePath: string, token: string): Promise<Baseline> {
+  if (!fs.existsSync(baselinePath)) {
+    return resolveCachedBaseline(baselinePath);
+  }
+  const pr = github.context.payload.pull_request;
+  const tracked = pr ? await trackedPath(baselinePath) : undefined;
+  if (!pr || !tracked) {
     core.info(`Using baseline file ${baselinePath}.`);
     return { path: baselinePath };
   }
 
+  const baseSha: string = pr.base?.sha ?? '';
+  const baseCopy = baseSha ? await fileAtCommit(token, tracked, baseSha) : undefined;
+  if (baseCopy !== undefined) {
+    fs.mkdirSync(path.dirname(BASE_BASELINE_PATH), { recursive: true });
+    fs.writeFileSync(BASE_BASELINE_PATH, baseCopy);
+    core.info(`Using ${baselinePath} from the base commit ${baseSha.substring(0, 7)}.`);
+    if (baseCopy === fs.readFileSync(baselinePath, 'utf8')) {
+      return { path: BASE_BASELINE_PATH };
+    }
+    return {
+      path: BASE_BASELINE_PATH,
+      note: `> **This pull request changes \`${baselinePath}\`.** It is compared against the base branch's copy; the new baseline applies once it is merged.`,
+    };
+  }
+
+  core.warning(`${baselinePath} is not in the base commit, so a baseline added by this pull request is not used.`);
+  const cached = await resolveCachedBaseline(baselinePath);
+  const added = `> **This pull request adds \`${baselinePath}\`.** A baseline added by a pull request is not used until it is merged.`;
+  return { path: cached.path, note: cached.note ? `${added}\n\n${cached.note}` : added };
+}
+
+// resolveCachedBaseline restores the snapshot cached from the base branch, or writes an empty
+// baseline with a visible note.
+async function resolveCachedBaseline(baselinePath: string): Promise<Baseline> {
   const pr = github.context.payload.pull_request;
   const baseSha: string = pr?.base?.sha ?? github.context.payload.before ?? '';
+  const exactKey = `${BASELINE_CACHE_PREFIX}${baseSha}`;
   try {
-    const key = await cache.restoreCache([BASELINE_CACHE_PATH], `${BASELINE_CACHE_PREFIX}${baseSha}`, [BASELINE_CACHE_PREFIX], undefined, CROSS_OS_CACHE);
+    const key = await cache.restoreCache([BASELINE_CACHE_PATH], exactKey, [BASELINE_CACHE_PREFIX], undefined, CROSS_OS_CACHE);
     if (key) {
       core.info(`Restored baseline from cache entry ${key}.`);
-      return { path: BASELINE_CACHE_PATH };
+      if (key === exactKey) {
+        return { path: BASELINE_CACHE_PATH };
+      }
+      // The prefix fallback picks the newest baseline of any commit, for example after GitHub
+      // evicted the base commit's entry. Its deltas include every change since that commit.
+      core.warning(`No baseline was cached for ${baseSha ? `commit ${baseSha.substring(0, 7)}` : 'this run'}; comparing against ${key} instead.`);
+      return {
+        path: BASELINE_CACHE_PATH,
+        note: `> **Baseline from another commit:** nothing was cached for ${baseSha ? `the base commit (\`${baseSha.substring(0, 7)}\`)` : 'this run'}, so this compares against the newest cached baseline (\`${key.substring(BASELINE_CACHE_PREFIX.length, BASELINE_CACHE_PREFIX.length + 7)}\`). Changes made between the two commits show up in the deltas too.`,
+      };
     }
     core.warning(`No baseline file at ${baselinePath} and no cached baseline. Every function will show as new.`);
   } catch (e) {
@@ -102,8 +183,26 @@ async function saveBaseline(snapshotPath: string): Promise<void> {
   }
 }
 
-// upsertReportComment keeps one report per PR: it updates the comment that carries the marker,
-// or creates it.
+interface IssueComment {
+  id: number;
+  body?: string | null;
+  user?: { login: string; type: string } | null;
+}
+
+// ownCommentMatcher matches the comments this Action may update. Anyone can post the marker, so a
+// comment counts only when the token's own identity wrote it: the user behind a personal token,
+// or, for the workflow's token (which cannot look itself up), a bot account.
+async function ownCommentMatcher(octokit: ReturnType<typeof github.getOctokit>): Promise<(c: IssueComment) => boolean> {
+  try {
+    const { data } = await octokit.rest.users.getAuthenticated();
+    return (c) => c.user?.login === data.login;
+  } catch {
+    return (c) => c.user?.type === 'Bot';
+  }
+}
+
+// upsertReportComment keeps one report per PR: it updates this Action's comment that carries the
+// marker, or creates it.
 async function upsertReportComment(token: string, body: string): Promise<void> {
   const pr = github.context.payload.pull_request;
   if (!pr) {
@@ -116,8 +215,9 @@ async function upsertReportComment(token: string, body: string): Promise<void> {
     issue_number: pr.number,
   };
   const comments = await octokit.paginate(octokit.rest.issues.listComments, { ...issue, per_page: 100 });
+  const isOwn = await ownCommentMatcher(octokit);
   // Typed by hand: ncc's TypeScript 5.9 build no longer infers paginate's element type.
-  const existing = comments.find((c: { id: number; body?: string | null }) => c.body?.includes(COMMENT_MARKER));
+  const existing = comments.find((c: IssueComment) => c.body?.includes(COMMENT_MARKER) && isOwn(c));
   if (existing) {
     await octokit.rest.issues.updateComment({ owner: issue.owner, repo: issue.repo, comment_id: existing.id, body });
     core.info(`Updated PR comment ${existing.id}.`);
@@ -147,9 +247,30 @@ function isNotFound(e: unknown): boolean {
 // appendToHistory adds the snapshot to HISTORY_FILE on the history branch. A missing branch is
 // created with no parent commit, so it shares no history with the code branches.
 async function appendToHistory(token: string, branch: string, snapshotPath: string): Promise<void> {
+  const snapshot: unknown = JSON.parse(fs.readFileSync(snapshotPath, 'utf8'));
+  // Two default-branch runs can write at once. The loser's write is rejected (409 for a stale
+  // file sha, 422 for a branch that now exists), so it reads the history again and retries.
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await writeHistory(token, branch, snapshot);
+      return;
+    } catch (e) {
+      if (!isWriteConflict(e) || attempt >= HISTORY_WRITE_ATTEMPTS) throw e;
+      core.info(`${HISTORY_FILE} on ${branch} changed while it was being updated; retrying (attempt ${attempt + 1} of ${HISTORY_WRITE_ATTEMPTS}).`);
+    }
+  }
+}
+
+const HISTORY_WRITE_ATTEMPTS = 3;
+
+function isWriteConflict(e: unknown): boolean {
+  const status = typeof e === 'object' && e !== null ? (e as { status?: unknown }).status : undefined;
+  return status === 409 || status === 422;
+}
+
+async function writeHistory(token: string, branch: string, snapshot: unknown): Promise<void> {
   const octokit = github.getOctokit(token);
   const { owner, repo } = github.context.repo;
-  const snapshot: unknown = JSON.parse(fs.readFileSync(snapshotPath, 'utf8'));
   const message = `Add Budget Gate snapshot for ${github.context.sha.substring(0, 7)}`;
 
   let branchExists = true;
@@ -176,7 +297,14 @@ async function appendToHistory(token: string, branch: string, snapshotPath: stri
     if (Array.isArray(existing.data) || existing.data.type !== 'file' || !('content' in existing.data)) {
       throw new Error(`${HISTORY_FILE} on ${branch} is not a file`);
     }
-    const parsed: unknown = JSON.parse(Buffer.from(existing.data.content, 'base64').toString('utf8'));
+    // For files over 1 MB the Contents API leaves `content` empty; the blob API returns files up
+    // to 100 MB. 200 snapshots of a contract with about 20 functions reach 1 MB.
+    let encoded = existing.data.content;
+    if (!encoded && existing.data.size > 0) {
+      const blob = await octokit.rest.git.getBlob({ owner, repo, file_sha: existing.data.sha });
+      encoded = blob.data.content;
+    }
+    const parsed: unknown = JSON.parse(Buffer.from(encoded, 'base64').toString('utf8'));
     const list = typeof parsed === 'object' && parsed !== null ? (parsed as { snapshots?: unknown }).snapshots : undefined;
     if (!Array.isArray(list)) {
       throw new Error(`${HISTORY_FILE} on ${branch} has no "snapshots" array; not overwriting it`);
@@ -191,6 +319,15 @@ async function appendToHistory(token: string, branch: string, snapshotPath: stri
   const content = Buffer.from(`${JSON.stringify({ snapshots }, null, 2)}\n`).toString('base64');
   await octokit.rest.repos.createOrUpdateFileContents({ owner, repo, path: HISTORY_FILE, branch, message, content, sha: fileSha });
   core.info(`Added the snapshot to ${HISTORY_FILE} on ${branch} (${snapshots.length} snapshots).`);
+}
+
+// writeSummary adds text to the job summary. A failure to write it is a warning.
+async function writeSummary(text: string): Promise<void> {
+  try {
+    await core.summary.addRaw(text).write();
+  } catch (e) {
+    core.warning(`Could not write the job summary: ${e}`);
+  }
 }
 
 // isDefaultBranchPush is true for a push to the repository's default branch.
@@ -209,12 +346,18 @@ export async function run(): Promise<void> {
     const newPath = core.getInput('new-path');
     const fixturePath = core.getInput('fixture-path');
     const rpcUrl = core.getInput('rpc-url');
+    // Provider URLs often embed an API key, and the runner logs core's command line. Masking it
+    // covers a URL that did not come straight from a secret (a variable, or one built from parts).
+    if (rpcUrl) {
+      core.setSecret(rpcUrl);
+    }
     let binaryPath = core.getInput('binary-path');
     const binaryVersion = core.getInput('binary-version');
     const historyBranch = core.getInput('history-branch');
 
     // Download binary if version is specified
-    if (binaryVersion && !binaryPath) {
+    const downloadCore = Boolean(binaryVersion && !binaryPath);
+    if (downloadCore) {
       const asset = coreAsset(os.platform(), os.arch());
       core.info(`Downloading soroban-budget-core v${binaryVersion} (${asset})...`);
       const release = `${CORE_RELEASES}/v${binaryVersion}`;
@@ -239,7 +382,14 @@ export async function run(): Promise<void> {
       binaryPath = './budget-core';
     }
 
-    const baseline = await resolveBaseline(baselinePath);
+    if (!downloadCore) {
+      await rejectPullRequestFile(binaryPath, 'The core binary', 'Use binary-version, or build core in an earlier step without committing it.');
+    }
+    if (!fixturePath) {
+      await rejectPullRequestFile(newPath || 'new.json', 'The new snapshot', 'Write it in an earlier step without committing it, or use fixture-path.');
+    }
+
+    const baseline = await resolveBaseline(baselinePath, token);
     core.info(`Running Soroban Budget Guard Core against ${baseline.path}`);
 
     let output = '';
@@ -281,6 +431,8 @@ export async function run(): Promise<void> {
       core.setOutput('regression_detected', 'false');
       const detail = errorOutput.trim() || 'no error output';
       core.setFailed(`soroban-budget-core failed with exit code ${exitCode}: ${detail}`);
+      // The same note as the comment, never core's stderr: it can contain the RPC URL.
+      await writeSummary(failedRunComment(exitCode));
       try {
         await upsertReportComment(token, failedRunComment(exitCode));
       } catch (e) {
@@ -295,14 +447,24 @@ export async function run(): Promise<void> {
     const hasRegression = exitCode === 1;
     core.info(hasRegression ? 'Regression found. Generating PR comment...' : 'No regression. Generating PR comment...');
 
+    const badgeUrl = hasRegression
+      ? 'https://img.shields.io/badge/BudgetGate-Regression%20Detected-red'
+      : 'https://img.shields.io/badge/BudgetGate-Passing-success';
+    const note = baseline.note ? `${baseline.note}\n\n` : '';
+    const report = `${COMMENT_MARKER}\n### 📊 Soroban Resource Budget Report\n\n![BudgetGate Status](${badgeUrl})\n\n${note}${output}\n\n*Generated by BudgetGate*`;
+
+    // The job summary shows the report on every run, including where a comment cannot be posted.
+    await writeSummary(report);
+
     // Post the markdown table to the PR
     if (github.context.payload.pull_request) {
-      const badgeUrl = hasRegression
-        ? 'https://img.shields.io/badge/BudgetGate-Regression%20Detected-red'
-        : 'https://img.shields.io/badge/BudgetGate-Passing-success';
-
-      const note = baseline.note ? `${baseline.note}\n\n` : '';
-      await upsertReportComment(token, `${COMMENT_MARKER}\n### 📊 Soroban Resource Budget Report\n\n![BudgetGate Status](${badgeUrl})\n\n${note}${output}\n\n*Generated by BudgetGate*`);
+      // A pull request from a fork gets a read-only token, so the comment fails there. That must
+      // not fail the check: the result is decided by core's exit code below.
+      try {
+        await upsertReportComment(token, report);
+      } catch (e) {
+        core.warning(`Could not post the report as a PR comment (pull requests from forks get a read-only token); it is in the job summary. ${e}`);
+      }
     } else {
       core.info('Not running in a Pull Request context. Skipping comment generation.');
       // Merged code is the new reference, so the snapshot is saved even after a regression.
@@ -325,7 +487,8 @@ export async function run(): Promise<void> {
     }
 
   } catch (error) {
-    if (error instanceof Error) core.setFailed(error.message);
+    // Anything thrown must fail the step; a non-Error value would otherwise end the run green.
+    core.setFailed(error instanceof Error ? error.message : String(error));
   }
 }
 

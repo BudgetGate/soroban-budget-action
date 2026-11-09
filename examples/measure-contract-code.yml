@@ -19,11 +19,11 @@ jobs:
   budget-check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # Reuse downloaded crates and compiled dependencies. A fresh checkout makes the contracts'
       # own sources newer than the cache, so cargo rebuilds them every run.
-      - uses: actions/cache@v6
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.cargo/registry
@@ -31,7 +31,7 @@ jobs:
             target
           key: contracts-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
 
-      - uses: stellar/stellar-cli@v28.1.0
+      - uses: stellar/stellar-cli@c0f4d0da891bbf214c08b8c5035ae6db80e9a3bd # v28.1.0
 
       - name: Deploy this commit's contracts and write the fixture
         run: budget/build-fixture.sh

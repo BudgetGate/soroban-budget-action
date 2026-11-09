@@ -7,7 +7,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as crypto from 'crypto';
-import { run, verifyChecksum, coreAsset, COMMENT_MARKER, BASELINE_CACHE_PATH, BASELINE_CACHE_PREFIX, HISTORY_FILE, HISTORY_LIMIT } from '../src/index';
+import { run, verifyChecksum, coreAsset, COMMENT_MARKER, BASELINE_CACHE_PATH, BASELINE_CACHE_PREFIX, BASE_BASELINE_PATH, HISTORY_FILE, HISTORY_LIMIT } from '../src/index';
 
 jest.mock('@actions/cache');
 jest.mock('@actions/core');
@@ -17,6 +17,9 @@ jest.mock('@actions/exec');
 jest.mock('@actions/tool-cache');
 // Only platform and arch are replaced, so tests can pick the runner the Action sees.
 jest.mock('os', () => ({ ...jest.requireActual('os'), platform: jest.fn(), arch: jest.fn() }));
+
+// The author GitHub reports for comments made with the workflow's token.
+const BOT = { login: 'github-actions[bot]', type: 'Bot' };
 
 describe('soroban-budget-action', () => {
   let mockGetInput: jest.Mock;
@@ -31,6 +34,7 @@ describe('soroban-budget-action', () => {
   let mockCacheFile: jest.Mock;
   let mockRestoreCache: jest.Mock;
   let mockSaveCache: jest.Mock;
+  let mockSummary: { addRaw: jest.Mock; write: jest.Mock };
   let originalCwd: string;
 
   beforeEach(() => {
@@ -54,6 +58,12 @@ describe('soroban-budget-action', () => {
     mockDownloadTool = tc.downloadTool as jest.Mock;
     mockCacheFile = tc.cacheFile as jest.Mock;
     
+    // git ls-files: nothing is committed unless a test says otherwise.
+    (exec.getExecOutput as jest.Mock).mockResolvedValue({ exitCode: 1, stdout: '', stderr: '' });
+
+    mockSummary = { addRaw: jest.fn().mockReturnThis(), write: jest.fn().mockResolvedValue(undefined) };
+    Object.defineProperty(core, 'summary', { value: mockSummary, writable: true });
+
     mockCreateComment = jest.fn();
     mockUpdateComment = jest.fn();
     mockListComments = jest.fn();
@@ -230,7 +240,7 @@ describe('soroban-budget-action', () => {
     mockGetInput.mockReturnValue('default');
     mockPaginate.mockResolvedValue([
       { id: 7, body: 'Looks good to me' },
-      { id: 42, body: `${COMMENT_MARKER}
+      { id: 42, user: BOT, body: `${COMMENT_MARKER}
 ### 📊 Soroban Resource Budget Report
 
 old report` },
@@ -253,9 +263,92 @@ old report` },
     expect(mockCreateComment).not.toHaveBeenCalled();
   });
 
+  it('does not update a marker comment that someone else wrote', async () => {
+    mockGetInput.mockReturnValue('default');
+    mockPaginate.mockResolvedValue([{ id: 9, user: { login: 'mallory', type: 'User' }, body: `${COMMENT_MARKER} not a report` }]);
+    mockExec.mockResolvedValue(0);
+
+    await run();
+
+    expect(mockUpdateComment).not.toHaveBeenCalled();
+    expect(mockCreateComment).toHaveBeenCalledTimes(1);
+  });
+
+  it('updates the comment of the user behind a personal token', async () => {
+    mockGetInput.mockReturnValue('default');
+    const getAuthenticated = jest.fn().mockResolvedValue({ data: { login: 'maintainer' } });
+    (github.getOctokit as jest.Mock).mockReturnValue({
+      paginate: mockPaginate,
+      rest: { issues: { createComment: mockCreateComment, updateComment: mockUpdateComment, listComments: mockListComments }, users: { getAuthenticated } },
+    });
+    mockPaginate.mockResolvedValue([
+      { id: 8, user: BOT, body: `${COMMENT_MARKER} another bot` },
+      { id: 42, user: { login: 'maintainer', type: 'User' }, body: `${COMMENT_MARKER} old report` },
+    ]);
+    mockExec.mockResolvedValue(0);
+
+    await run();
+
+    expect(mockUpdateComment).toHaveBeenCalledWith(expect.objectContaining({ comment_id: 42 }));
+    expect(mockCreateComment).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['passes', 0, false],
+    ['still fails on a regression', 1, true],
+  ])('only warns when the comment cannot be posted (fork PR) and %s', async (_label, exitCode, fails) => {
+    mockGetInput.mockReturnValue('default');
+    mockCreateComment.mockRejectedValue(Object.assign(new Error('Resource not accessible by integration'), { status: 403 }));
+    mockExec.mockImplementation(async (cmd, args, options) => {
+      options?.listeners?.stdout?.(Buffer.from('| f | CPUInstructions |'));
+      return exitCode;
+    });
+
+    await run();
+
+    expect(core.warning).toHaveBeenCalledWith(expect.stringContaining('Could not post the report as a PR comment'));
+    expect(mockSummary.addRaw).toHaveBeenCalledWith(expect.stringContaining('| f | CPUInstructions |'));
+    expect(mockSummary.write).toHaveBeenCalled();
+    if (fails) {
+      expect(mockSetFailed).toHaveBeenCalledWith(expect.stringContaining('Resource cost regression detected'));
+    } else {
+      expect(mockSetFailed).not.toHaveBeenCalled();
+    }
+  });
+
+  it('writes the failed-run note, without core\'s stderr, to the job summary after a core error', async () => {
+    mockGetInput.mockReturnValue('default');
+    mockExec.mockImplementation(async (cmd, args, options) => {
+      options?.listeners?.stderr?.(Buffer.from('Error reading network caps from https://rpc.example/key-123'));
+      return 2;
+    });
+
+    await run();
+
+    const summary: string = mockSummary.addRaw.mock.calls[0][0];
+    expect(summary).toContain('**The latest run failed:**');
+    expect(summary).not.toContain('key-123');
+  });
+
+  it('writes the report to the job summary outside a pull request too', async () => {
+    mockGetInput.mockReturnValue('default');
+    Object.defineProperty(github, 'context', {
+      value: { payload: {}, repo: { owner: 'test-owner', repo: 'test-repo' } },
+      writable: true,
+    });
+    mockExec.mockImplementation(async (cmd, args, options) => {
+      options?.listeners?.stdout?.(Buffer.from('the report'));
+      return 0;
+    });
+
+    await run();
+
+    expect(mockSummary.addRaw).toHaveBeenCalledWith(expect.stringContaining('the report'));
+  });
+
   it('replaces an earlier report with the failed-run note when core fails', async () => {
     mockGetInput.mockReturnValue('default');
-    mockPaginate.mockResolvedValue([{ id: 42, body: `${COMMENT_MARKER}
+    mockPaginate.mockResolvedValue([{ id: 42, user: BOT, body: `${COMMENT_MARKER}
 ![BudgetGate Status](https://img.shields.io/badge/BudgetGate-Passing-success)
 old report` }]);
     mockExec.mockResolvedValue(2);
@@ -330,6 +423,15 @@ old report` }]);
 
     expect(mockSetFailed).toHaveBeenCalledWith(errorMsg);
   });
+
+  it('fails when something other than an Error is thrown', async () => {
+    mockGetInput.mockReturnValue('default');
+    mockExec.mockRejectedValue('spawn budget-core ENOENT');
+
+    await run();
+
+    expect(mockSetFailed).toHaveBeenCalledWith('spawn budget-core ENOENT');
+  });
   describe('binary-version', () => {
     const RELEASE = 'https://github.com/BudgetGate/soroban-budget-core/releases/download/v1.2.3';
     const CORE_ASSET = 'budget-core-linux-amd64';
@@ -378,6 +480,14 @@ old report` }]);
         expect.any(Object)
       );
       expect(mockSetFailed).not.toHaveBeenCalled();
+    });
+
+    it('masks the RPC URL in the log, since it can carry an API key', async () => {
+      serveRelease(`${sha256('binary bytes')}  ${CORE_ASSET}\n`);
+
+      await run();
+
+      expect(core.setSecret).toHaveBeenCalledWith('https://rpc.example');
     });
 
     it.each([
@@ -539,6 +649,46 @@ old report` }]);
       expect(mockSetFailed).not.toHaveBeenCalled();
     });
 
+    it('reads a history over 1 MB through the blob API', async () => {
+      // The Contents API answers files over 1 MB with an empty content and encoding "none".
+      repos.getContent.mockResolvedValue({ data: { type: 'file', sha: 'filesha', size: 1_500_000, encoding: 'none', content: '' } });
+      git.getBlob = jest.fn().mockResolvedValue({ data: { content: Buffer.from(JSON.stringify({ snapshots: [{ commit_sha: 'a' }] })).toString('base64') } });
+
+      await run();
+
+      expect(git.getBlob).toHaveBeenCalledWith({ owner: 'test-owner', repo: 'test-repo', file_sha: 'filesha' });
+      expect(writtenSnapshots()).toEqual([{ commit_sha: 'a' }, NEW_SNAPSHOT]);
+      expect(core.warning).not.toHaveBeenCalledWith(expect.stringContaining(HISTORY_FILE));
+    });
+
+    it('reads the history again and retries when another run wrote it first', async () => {
+      repos.getContent
+        .mockResolvedValueOnce(existingHistory([{ commit_sha: 'a' }]))
+        .mockResolvedValueOnce({ data: { type: 'file', sha: 'newersha', content: Buffer.from(JSON.stringify({ snapshots: [{ commit_sha: 'a' }, { commit_sha: 'b' }] })).toString('base64') } });
+      repos.createOrUpdateFileContents
+        .mockRejectedValueOnce(Object.assign(new Error('is at filesha but expected newersha'), { status: 409 }))
+        .mockResolvedValueOnce({ data: {} });
+
+      await run();
+
+      expect(repos.createOrUpdateFileContents).toHaveBeenCalledTimes(2);
+      const retry = repos.createOrUpdateFileContents.mock.calls[1][0];
+      expect(retry.sha).toBe('newersha');
+      expect(JSON.parse(Buffer.from(retry.content, 'base64').toString('utf8')).snapshots).toEqual([{ commit_sha: 'a' }, { commit_sha: 'b' }, NEW_SNAPSHOT]);
+      expect(core.warning).not.toHaveBeenCalledWith(expect.stringContaining(HISTORY_FILE));
+    });
+
+    it('gives up with a warning after three conflicting writes', async () => {
+      repos.getContent.mockResolvedValue(existingHistory([]));
+      repos.createOrUpdateFileContents.mockRejectedValue(Object.assign(new Error('Conflict'), { status: 409 }));
+
+      await run();
+
+      expect(repos.createOrUpdateFileContents).toHaveBeenCalledTimes(3);
+      expect(core.warning).toHaveBeenCalledWith(expect.stringContaining('Conflict'));
+      expect(mockSetFailed).not.toHaveBeenCalled();
+    });
+
     it(`keeps only the last ${HISTORY_LIMIT} snapshots`, async () => {
       const full = Array.from({ length: HISTORY_LIMIT }, (_, i) => ({ commit_sha: `c${i}` }));
       repos.getContent.mockResolvedValue(existingHistory(full));
@@ -632,6 +782,20 @@ old report` }]);
       expect(mockCreateComment).toHaveBeenCalledWith(expect.objectContaining({ body: expect.not.stringContaining('No baseline found') }));
     });
 
+    it('notes when the restored baseline is from another commit than the base', async () => {
+      mockGetInput.mockImplementation(inputs());
+      mockRestoreCache.mockResolvedValue(`${BASELINE_CACHE_PREFIX}0123456789abcdef`);
+      mockExec.mockResolvedValue(0);
+
+      await run();
+
+      expect(baselineArg()).toBe(BASELINE_CACHE_PATH);
+      expect(core.warning).toHaveBeenCalledWith(expect.stringContaining(`comparing against ${BASELINE_CACHE_PREFIX}0123456789abcdef`));
+      expect(mockCreateComment).toHaveBeenCalledWith(expect.objectContaining({
+        body: expect.stringContaining('**Baseline from another commit:** nothing was cached for the base commit (`basesha`), so this compares against the newest cached baseline (`0123456`)'),
+      }));
+    });
+
     it('falls back to an empty baseline with a visible note when nothing is cached', async () => {
       mockGetInput.mockImplementation(inputs());
       mockExec.mockResolvedValue(0);
@@ -654,6 +818,119 @@ old report` }]);
       expect(baselineArg()).toBe(BASELINE_CACHE_PATH);
       expect(core.warning).toHaveBeenCalledWith(expect.stringContaining('cache service unavailable'));
       expect(mockSetFailed).not.toHaveBeenCalled();
+    });
+
+    describe('committed files on a pull request', () => {
+      let getContent: jest.Mock;
+      // git ls-files reports these files as committed, under the given repository paths.
+      const committed = (files: Record<string, string>) => {
+        (exec.getExecOutput as jest.Mock).mockImplementation(async (_cmd: string, args: string[]) => {
+          const file = args[args.length - 1];
+          return file in files ? { exitCode: 0, stdout: `${files[file]}\n`, stderr: '' } : { exitCode: 1, stdout: '', stderr: '' };
+        });
+      };
+
+      beforeEach(() => {
+        getContent = jest.fn();
+        (github.getOctokit as jest.Mock).mockReturnValue({
+          paginate: mockPaginate,
+          rest: { issues: { createComment: mockCreateComment, updateComment: mockUpdateComment, listComments: mockListComments }, repos: { getContent } },
+        });
+        mockGetInput.mockImplementation(inputs({ 'baseline-path': 'budget/baseline.json' }));
+        fs.mkdirSync('budget');
+        mockExec.mockResolvedValue(0);
+      });
+
+      it('uses the base commit\'s copy of a committed baseline', async () => {
+        fs.writeFileSync('budget/baseline.json', EMPTY);
+        committed({ 'budget/baseline.json': 'budget/baseline.json' });
+        getContent.mockResolvedValue({ data: EMPTY });
+
+        await run();
+
+        expect(getContent).toHaveBeenCalledWith({ owner: 'test-owner', repo: 'test-repo', path: 'budget/baseline.json', ref: 'basesha', mediaType: { format: 'raw' } });
+        expect(baselineArg()).toBe(BASE_BASELINE_PATH);
+        expect(mockCreateComment).toHaveBeenCalledWith(expect.objectContaining({ body: expect.not.stringContaining('This pull request changes') }));
+      });
+
+      it('compares against the base copy, with a note, when the pull request edits the baseline', async () => {
+        const inflated = '{"schema_version":"2.0","functions":[{"name":"f","cpu_instructions":999999999}]}';
+        fs.writeFileSync('budget/baseline.json', inflated);
+        committed({ 'budget/baseline.json': 'budget/baseline.json' });
+        getContent.mockResolvedValue({ data: EMPTY });
+
+        await run();
+
+        expect(baselineArg()).toBe(BASE_BASELINE_PATH);
+        expect(fs.readFileSync(BASE_BASELINE_PATH, 'utf8')).toBe(EMPTY);
+        expect(mockCreateComment).toHaveBeenCalledWith(expect.objectContaining({ body: expect.stringContaining('**This pull request changes `budget/baseline.json`.**') }));
+      });
+
+      it('ignores a baseline the pull request adds and uses the cache', async () => {
+        fs.writeFileSync('budget/baseline.json', EMPTY);
+        committed({ 'budget/baseline.json': 'budget/baseline.json' });
+        getContent.mockRejectedValue(Object.assign(new Error('Not Found'), { status: 404 }));
+        mockRestoreCache.mockResolvedValue(`${BASELINE_CACHE_PREFIX}basesha`);
+
+        await run();
+
+        expect(baselineArg()).toBe(BASELINE_CACHE_PATH);
+        expect(mockCreateComment).toHaveBeenCalledWith(expect.objectContaining({ body: expect.stringContaining('**This pull request adds `budget/baseline.json`.**') }));
+      });
+
+      it('fails rather than use the pull request\'s copy when the base copy cannot be read', async () => {
+        fs.writeFileSync('budget/baseline.json', EMPTY);
+        committed({ 'budget/baseline.json': 'budget/baseline.json' });
+        getContent.mockRejectedValue(Object.assign(new Error('Server Error'), { status: 500 }));
+
+        await run();
+
+        expect(mockSetFailed).toHaveBeenCalledWith('Server Error');
+        expect(baselineArg()).toBeUndefined();
+      });
+
+      it('uses a baseline file an earlier step wrote (not committed) as it is', async () => {
+        fs.writeFileSync('budget/baseline.json', EMPTY);
+
+        await run();
+
+        expect(getContent).not.toHaveBeenCalled();
+        expect(baselineArg()).toBe('budget/baseline.json');
+      });
+
+      it('refuses a committed core binary', async () => {
+        committed({ './budget-core': 'budget-core' });
+
+        await run();
+
+        expect(mockSetFailed).toHaveBeenCalledWith(expect.stringContaining('The core binary ./budget-core is committed in the repository'));
+        expect(mockExec).not.toHaveBeenCalled();
+      });
+
+      it('refuses a committed new snapshot in new-path mode', async () => {
+        mockGetInput.mockImplementation(inputs({ 'fixture-path': '', 'new-path': 'budget/new.json' }));
+        committed({ 'budget/new.json': 'budget/new.json' });
+
+        await run();
+
+        expect(mockSetFailed).toHaveBeenCalledWith(expect.stringContaining('The new snapshot budget/new.json is committed in the repository'));
+        expect(mockExec).not.toHaveBeenCalled();
+      });
+
+      it('trusts committed files on a push, where the code is merged', async () => {
+        Object.defineProperty(github, 'context', {
+          value: { payload: { repository: { default_branch: 'main' }, before: 'prevsha' }, repo: { owner: 'test-owner', repo: 'test-repo' }, sha: 'headsha', ref: 'refs/heads/feature' },
+          writable: true,
+        });
+        fs.writeFileSync('budget/baseline.json', EMPTY);
+        committed({ 'budget/baseline.json': 'budget/baseline.json', './budget-core': 'budget-core' });
+
+        await run();
+
+        expect(getContent).not.toHaveBeenCalled();
+        expect(baselineArg()).toBe('budget/baseline.json');
+        expect(mockSetFailed).not.toHaveBeenCalled();
+      });
     });
 
     describe('on a push', () => {
