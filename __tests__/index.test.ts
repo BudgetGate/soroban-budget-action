@@ -18,6 +18,9 @@ jest.mock('@actions/tool-cache');
 // Only platform and arch are replaced, so tests can pick the runner the Action sees.
 jest.mock('os', () => ({ ...jest.requireActual('os'), platform: jest.fn(), arch: jest.fn() }));
 
+// The author GitHub reports for comments made with the workflow's token.
+const BOT = { login: 'github-actions[bot]', type: 'Bot' };
+
 describe('soroban-budget-action', () => {
   let mockGetInput: jest.Mock;
   let mockSetFailed: jest.Mock;
@@ -31,6 +34,7 @@ describe('soroban-budget-action', () => {
   let mockCacheFile: jest.Mock;
   let mockRestoreCache: jest.Mock;
   let mockSaveCache: jest.Mock;
+  let mockSummary: { addRaw: jest.Mock; write: jest.Mock };
   let originalCwd: string;
 
   beforeEach(() => {
@@ -54,6 +58,9 @@ describe('soroban-budget-action', () => {
     mockDownloadTool = tc.downloadTool as jest.Mock;
     mockCacheFile = tc.cacheFile as jest.Mock;
     
+    mockSummary = { addRaw: jest.fn().mockReturnThis(), write: jest.fn().mockResolvedValue(undefined) };
+    Object.defineProperty(core, 'summary', { value: mockSummary, writable: true });
+
     mockCreateComment = jest.fn();
     mockUpdateComment = jest.fn();
     mockListComments = jest.fn();
@@ -230,7 +237,7 @@ describe('soroban-budget-action', () => {
     mockGetInput.mockReturnValue('default');
     mockPaginate.mockResolvedValue([
       { id: 7, body: 'Looks good to me' },
-      { id: 42, body: `${COMMENT_MARKER}
+      { id: 42, user: BOT, body: `${COMMENT_MARKER}
 ### 📊 Soroban Resource Budget Report
 
 old report` },
@@ -253,9 +260,78 @@ old report` },
     expect(mockCreateComment).not.toHaveBeenCalled();
   });
 
+  it('does not update a marker comment that someone else wrote', async () => {
+    mockGetInput.mockReturnValue('default');
+    mockPaginate.mockResolvedValue([{ id: 9, user: { login: 'mallory', type: 'User' }, body: `${COMMENT_MARKER} not a report` }]);
+    mockExec.mockResolvedValue(0);
+
+    await run();
+
+    expect(mockUpdateComment).not.toHaveBeenCalled();
+    expect(mockCreateComment).toHaveBeenCalledTimes(1);
+  });
+
+  it('updates the comment of the user behind a personal token', async () => {
+    mockGetInput.mockReturnValue('default');
+    const getAuthenticated = jest.fn().mockResolvedValue({ data: { login: 'maintainer' } });
+    (github.getOctokit as jest.Mock).mockReturnValue({
+      paginate: mockPaginate,
+      rest: { issues: { createComment: mockCreateComment, updateComment: mockUpdateComment, listComments: mockListComments }, users: { getAuthenticated } },
+    });
+    mockPaginate.mockResolvedValue([
+      { id: 8, user: BOT, body: `${COMMENT_MARKER} another bot` },
+      { id: 42, user: { login: 'maintainer', type: 'User' }, body: `${COMMENT_MARKER} old report` },
+    ]);
+    mockExec.mockResolvedValue(0);
+
+    await run();
+
+    expect(mockUpdateComment).toHaveBeenCalledWith(expect.objectContaining({ comment_id: 42 }));
+    expect(mockCreateComment).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['passes', 0, false],
+    ['still fails on a regression', 1, true],
+  ])('only warns when the comment cannot be posted (fork PR) and %s', async (_label, exitCode, fails) => {
+    mockGetInput.mockReturnValue('default');
+    mockCreateComment.mockRejectedValue(Object.assign(new Error('Resource not accessible by integration'), { status: 403 }));
+    mockExec.mockImplementation(async (cmd, args, options) => {
+      options?.listeners?.stdout?.(Buffer.from('| f | CPUInstructions |'));
+      return exitCode;
+    });
+
+    await run();
+
+    expect(core.warning).toHaveBeenCalledWith(expect.stringContaining('Could not post the report as a PR comment'));
+    expect(mockSummary.addRaw).toHaveBeenCalledWith(expect.stringContaining('| f | CPUInstructions |'));
+    expect(mockSummary.write).toHaveBeenCalled();
+    if (fails) {
+      expect(mockSetFailed).toHaveBeenCalledWith(expect.stringContaining('Resource cost regression detected'));
+    } else {
+      expect(mockSetFailed).not.toHaveBeenCalled();
+    }
+  });
+
+  it('writes the report to the job summary outside a pull request too', async () => {
+    mockGetInput.mockReturnValue('default');
+    Object.defineProperty(github, 'context', {
+      value: { payload: {}, repo: { owner: 'test-owner', repo: 'test-repo' } },
+      writable: true,
+    });
+    mockExec.mockImplementation(async (cmd, args, options) => {
+      options?.listeners?.stdout?.(Buffer.from('the report'));
+      return 0;
+    });
+
+    await run();
+
+    expect(mockSummary.addRaw).toHaveBeenCalledWith(expect.stringContaining('the report'));
+  });
+
   it('replaces an earlier report with the failed-run note when core fails', async () => {
     mockGetInput.mockReturnValue('default');
-    mockPaginate.mockResolvedValue([{ id: 42, body: `${COMMENT_MARKER}
+    mockPaginate.mockResolvedValue([{ id: 42, user: BOT, body: `${COMMENT_MARKER}
 ![BudgetGate Status](https://img.shields.io/badge/BudgetGate-Passing-success)
 old report` }]);
     mockExec.mockResolvedValue(2);
