@@ -48856,9 +48856,29 @@ function isNotFound(e) {
 // appendToHistory adds the snapshot to HISTORY_FILE on the history branch. A missing branch is
 // created with no parent commit, so it shares no history with the code branches.
 async function appendToHistory(token, branch, snapshotPath) {
+    const snapshot = JSON.parse(fs.readFileSync(snapshotPath, 'utf8'));
+    // Two default-branch runs can write at once. The loser's write is rejected (409 for a stale
+    // file sha, 422 for a branch that now exists), so it reads the history again and retries.
+    for (let attempt = 1;; attempt++) {
+        try {
+            await writeHistory(token, branch, snapshot);
+            return;
+        }
+        catch (e) {
+            if (!isWriteConflict(e) || attempt >= HISTORY_WRITE_ATTEMPTS)
+                throw e;
+            core.info(`${exports.HISTORY_FILE} on ${branch} changed while it was being updated; retrying (attempt ${attempt + 1} of ${HISTORY_WRITE_ATTEMPTS}).`);
+        }
+    }
+}
+const HISTORY_WRITE_ATTEMPTS = 3;
+function isWriteConflict(e) {
+    const status = typeof e === 'object' && e !== null ? e.status : undefined;
+    return status === 409 || status === 422;
+}
+async function writeHistory(token, branch, snapshot) {
     const octokit = github.getOctokit(token);
     const { owner, repo } = github.context.repo;
-    const snapshot = JSON.parse(fs.readFileSync(snapshotPath, 'utf8'));
     const message = `Add Budget Gate snapshot for ${github.context.sha.substring(0, 7)}`;
     let branchExists = true;
     try {

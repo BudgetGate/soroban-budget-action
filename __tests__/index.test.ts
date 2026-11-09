@@ -647,6 +647,34 @@ old report` }]);
       expect(core.warning).not.toHaveBeenCalledWith(expect.stringContaining(HISTORY_FILE));
     });
 
+    it('reads the history again and retries when another run wrote it first', async () => {
+      repos.getContent
+        .mockResolvedValueOnce(existingHistory([{ commit_sha: 'a' }]))
+        .mockResolvedValueOnce({ data: { type: 'file', sha: 'newersha', content: Buffer.from(JSON.stringify({ snapshots: [{ commit_sha: 'a' }, { commit_sha: 'b' }] })).toString('base64') } });
+      repos.createOrUpdateFileContents
+        .mockRejectedValueOnce(Object.assign(new Error('is at filesha but expected newersha'), { status: 409 }))
+        .mockResolvedValueOnce({ data: {} });
+
+      await run();
+
+      expect(repos.createOrUpdateFileContents).toHaveBeenCalledTimes(2);
+      const retry = repos.createOrUpdateFileContents.mock.calls[1][0];
+      expect(retry.sha).toBe('newersha');
+      expect(JSON.parse(Buffer.from(retry.content, 'base64').toString('utf8')).snapshots).toEqual([{ commit_sha: 'a' }, { commit_sha: 'b' }, NEW_SNAPSHOT]);
+      expect(core.warning).not.toHaveBeenCalledWith(expect.stringContaining(HISTORY_FILE));
+    });
+
+    it('gives up with a warning after three conflicting writes', async () => {
+      repos.getContent.mockResolvedValue(existingHistory([]));
+      repos.createOrUpdateFileContents.mockRejectedValue(Object.assign(new Error('Conflict'), { status: 409 }));
+
+      await run();
+
+      expect(repos.createOrUpdateFileContents).toHaveBeenCalledTimes(3);
+      expect(core.warning).toHaveBeenCalledWith(expect.stringContaining('Conflict'));
+      expect(mockSetFailed).not.toHaveBeenCalled();
+    });
+
     it(`keeps only the last ${HISTORY_LIMIT} snapshots`, async () => {
       const full = Array.from({ length: HISTORY_LIMIT }, (_, i) => ({ commit_sha: `c${i}` }));
       repos.getContent.mockResolvedValue(existingHistory(full));
