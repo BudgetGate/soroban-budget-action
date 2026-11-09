@@ -48825,6 +48825,11 @@ async function run() {
         const newPath = core.getInput('new-path');
         const fixturePath = core.getInput('fixture-path');
         const rpcUrl = core.getInput('rpc-url');
+        // Provider URLs often embed an API key, and the runner logs core's command line. Masking it
+        // covers a URL that did not come straight from a secret (a variable, or one built from parts).
+        if (rpcUrl) {
+            core.setSecret(rpcUrl);
+        }
         let binaryPath = core.getInput('binary-path');
         const binaryVersion = core.getInput('binary-version');
         const historyBranch = core.getInput('history-branch');

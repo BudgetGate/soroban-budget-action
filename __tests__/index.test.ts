@@ -389,6 +389,14 @@ old report` }]);
       expect(mockSetFailed).not.toHaveBeenCalled();
     });
 
+    it('masks the RPC URL in the log, since it can carry an API key', async () => {
+      serveRelease(`${sha256('binary bytes')}  ${CORE_ASSET}\n`);
+
+      await run();
+
+      expect(core.setSecret).toHaveBeenCalledWith('https://rpc.example');
+    });
+
     it.each([
       { name: 'the checksum differs', sums: `${'0'.repeat(64)}  ${CORE_ASSET}\n`, error: `Checksum mismatch for ${CORE_ASSET}` },
       { name: 'SHA256SUMS has no entry for the binary', sums: `${sha256('binary bytes')}  other-file\n`, error: `soroban-budget-core v1.2.3 has no ${CORE_ASSET}` },
