@@ -48816,7 +48816,14 @@ async function appendToHistory(token, branch, snapshotPath) {
         if (Array.isArray(existing.data) || existing.data.type !== 'file' || !('content' in existing.data)) {
             throw new Error(`${exports.HISTORY_FILE} on ${branch} is not a file`);
         }
-        const parsed = JSON.parse(Buffer.from(existing.data.content, 'base64').toString('utf8'));
+        // For files over 1 MB the Contents API leaves `content` empty; the blob API returns files up
+        // to 100 MB. 200 snapshots of a contract with about 20 functions reach 1 MB.
+        let encoded = existing.data.content;
+        if (!encoded && existing.data.size > 0) {
+            const blob = await octokit.rest.git.getBlob({ owner, repo, file_sha: existing.data.sha });
+            encoded = blob.data.content;
+        }
+        const parsed = JSON.parse(Buffer.from(encoded, 'base64').toString('utf8'));
         const list = typeof parsed === 'object' && parsed !== null ? parsed.snapshots : undefined;
         if (!Array.isArray(list)) {
             throw new Error(`${exports.HISTORY_FILE} on ${branch} has no "snapshots" array; not overwriting it`);

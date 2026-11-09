@@ -632,6 +632,18 @@ old report` }]);
       expect(mockSetFailed).not.toHaveBeenCalled();
     });
 
+    it('reads a history over 1 MB through the blob API', async () => {
+      // The Contents API answers files over 1 MB with an empty content and encoding "none".
+      repos.getContent.mockResolvedValue({ data: { type: 'file', sha: 'filesha', size: 1_500_000, encoding: 'none', content: '' } });
+      git.getBlob = jest.fn().mockResolvedValue({ data: { content: Buffer.from(JSON.stringify({ snapshots: [{ commit_sha: 'a' }] })).toString('base64') } });
+
+      await run();
+
+      expect(git.getBlob).toHaveBeenCalledWith({ owner: 'test-owner', repo: 'test-repo', file_sha: 'filesha' });
+      expect(writtenSnapshots()).toEqual([{ commit_sha: 'a' }, NEW_SNAPSHOT]);
+      expect(core.warning).not.toHaveBeenCalledWith(expect.stringContaining(HISTORY_FILE));
+    });
+
     it(`keeps only the last ${HISTORY_LIMIT} snapshots`, async () => {
       const full = Array.from({ length: HISTORY_LIMIT }, (_, i) => ({ commit_sha: `c${i}` }));
       repos.getContent.mockResolvedValue(existingHistory(full));
